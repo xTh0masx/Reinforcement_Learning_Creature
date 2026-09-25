@@ -36,7 +36,7 @@
     "neutral": 3,
     "radius": 0.2,
     "wander_speed": 0.3,
-    "flee_speed": 0.9,
+    "flee_speed": 0.7,
     "flee_radius": 5.0,
     "respawn_seconds": [60.0, 120.0],
     "respawn_min_distance": 10.0

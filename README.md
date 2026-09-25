@@ -31,11 +31,12 @@ python -m sim.bodies                           # both physics bodies stand in th
 
 ```bash
 # Locomotion (walking) brains - ~1 h each on 8 CPU cores, checkpoints every 250k steps from step 0
-python train_locomotion.py --species myrranox --steps 4e6 --run myr_legs_v1
-python train_locomotion.py --species dc       --steps 4e6 --run dc_legs_v1
+python train_locomotion.py --species myrranox --steps 4e6 --run myr_legs_v2 --version 2    # natural gait
+python train_locomotion.py --species dc       --steps 4e6 --run dc_legs_v2  --version 2
 
-# Navigation brains (PROJECT_PLAN.md section 8, stage 1)
-python train.py --species myrranox --steps 3e6 --run myr_brain_v1
+# Predator (navigation) brains: against a scripted rival, then against the other species' frozen brain
+python train.py --species myrranox --rival dc --steps 3e6 --run myr_brain_v1_r1
+python train.py --species myrranox --rival dc --rival-brain models/dc_brain_v1_r1 --resume models/myr_brain_v1_r1 --steps 3e6 --run myr_brain_v1_r2
 
 tensorboard --logdir runs                      # live curves: rollout/ep_rew_mean, train/penalty_scale
 ```
@@ -98,6 +99,12 @@ Debug stand-ins (not RL): `record.py --policy heuristic` (scripted navigation, g
 | `train.py`, `train_locomotion.py` | PPO training (navigation / locomotion) |
 | `play_locomotion.py`, `locomotion_progress.py` | Evaluation, GIFs, progress material |
 | `make_training_video.py`, `watch_locomotion.py` | Training-session videos (`docs/videos/`), live viewer |
+| `make_comparison_video.py`, `gait_analysis.py` | Two brains side by side (v1 vs v2); footfall diagrams |
+| `calibrate_energy.py` | Power curve of a locomotion brain → `sim/energy.json` (hunger/fatigue in 2D training) |
+| `sim/gaits.py`, `sim/symmetry.py` | v2 target gaits; mirror-symmetry loss (`SymmetricPPO`) |
+| `sim/physics_world.py` | MuJoCo world from `habitat.json` with several creatures and their brains |
+| `sim/scripted.py`, `sim/nav_brain.py` | Scripted rival predator; trained navigation brain for playback |
+| `tests/test_locomotion_v2.py` | Mirror-simulation and gait-reward checks |
 | `record.py`, `record_physics.py` | Recordings for Blender (10 Hz CSV + 50 Hz pose CSV per creature) |
 | `blender/scripts/` | `build_habitat.py`, `import_trajectories.py`, `rig_myrranox.py`, `rig_dc.py`, `rig_common.py` |
 | `blender/habitat_showcase.blend` | Scene with habitat, rigs and cameras (Git LFS); `_before_rig.blend` = backup |
@@ -113,4 +120,7 @@ Debug stand-ins (not RL): `record.py --policy heuristic` (scripted navigation, g
   evaluation. Forward speed is tracked within ~0.05 m/s (DC trots at 2.5 m/s), both stop and restart. Turning is
   weak (Myrranox right turns ~60 %, no turning on the spot or backwards; DC turns ~25 % of the command).
   Details: [docs/locomotion_training_log.md](docs/locomotion_training_log.md); whole-session videos in `docs/videos/`.
-- Navigation brains: not trained yet (`train.py` ready).
+- Locomotion **v2** (`models/*_legs_v2`): natural gait – insect tripod / quadruped walk→trot, symmetric turning,
+  2.4–5× less energy, no falls. v1 vs v2 and the whole story: **[docs/RESULTS.md](docs/RESULTS.md)**.
+- Physics habitat world and predator rules (territories, raids, energy-driven hunger, rival) done.
+- Predator (navigation) brains: round 1 against scripted rivals training (`*_brain_v1_r1`).

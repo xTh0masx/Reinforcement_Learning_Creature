@@ -1,0 +1,162 @@
+# Endemic Creatures – what we did and what came out
+
+Status: 25 Sep 2026 · Project plan: [PROJECT_PLAN.md](../PROJECT_PLAN.md) · Walking training details:
+[locomotion_training_log.md](locomotion_training_log.md) · Every training run: [experiments.csv](experiments.csv)
+
+Two predator species from a Blender scene – **Myrranox** (6-legged arthropod, 1.5 m long) and **DC_SKIN_RAW**
+(quadruped, 1.3 m tall) – live in one 100 × 100 m habitat. **Everything they do is learned with reinforcement
+learning** (Gymnasium + Stable-Baselines3 PPO, CPU only):
+
+| Brain | Environment | Decides | Rate |
+| --- | --- | --- | --- |
+| Navigation / predator brain | `sim/creature_env.py` – 2D habitat, prey, hunger, fatigue, territories, rival | where to go: forward speed + turn rate | 10 Hz |
+| Locomotion brain | `sim/locomotion_env.py` – MuJoCo physics body | every leg joint, to follow that speed + turn rate | 50 Hz |
+
+The recorded body pose and joint angles are played back on the rigged models in Blender.
+
+---
+
+## 1. Timeline
+
+| Date | Step | Result |
+| --- | --- | --- |
+| 23 Sep | Project plan; repo structure; `requirements.txt`; PPO on CartPole | CartPole 500.0 ± 0.0 (smoke test passed) |
+| 23 Sep | Habitat sim (`CreatureEnv`), species limits, matplotlib viewer, `check_env` | Env passes `check_env`, ~3000 steps/s |
+| 23 Sep | Blender: habitat from `habitat.json`, trajectory import, follow cameras | Scripted preview plays in `habitat_showcase.blend` |
+| 25 Sep | Blender scene restored after an unsaved session and saved | `blender/habitat_showcase.blend` |
+| 25 Sep | Decision: **walking is learned by RL too** (MuJoCo) | Plan changed (section 14) |
+| 25 Sep | Physics bodies measured on the Blender meshes; rigs for both models; pose playback | Bone tips match the physics feet to **0.01 mm** |
+| 25 Sep | Locomotion pilots 1–3 | Failed (penalties too strong / learned to stand still) – kept as lessons |
+| 25 Sep | Locomotion **v1** (4M steps each) | Both walk, never fall – but unnatural gaits |
+| 25 Sep | Locomotion **v2** – natural gait (4M steps each) | Insect tripod / quadruped walk→trot, symmetric, 2.4–5× less energy |
+| 25 Sep | **B** physics habitat world; **C** predator rules (territories, raids, energy-driven hunger, rival) | Tested; two design problems found and fixed |
+| 25 Sep | Prey made slower (0.9 → 0.7 m/s, owner decision); **D1** predator brains started | running |
+
+---
+
+## 2. Habitat and needs (2D, `sim/creature_env.py`)
+
+- Map `sim/habitat.json` (shared with Blender): two home zones (radius 28 m) overlapping at a water hole, 6 rest spots,
+  14 rocks, walls. Prey are red dots that wander and flee from predators.
+- Needs per creature: **hunger** (rises all the time, faster with effort; catching prey −0.5), **fatigue**
+  (rises when moving, falls when standing, faster on a rest spot; at 100 % top speed is capped at 30 %),
+  **alertness** (rival nearby).
+- Observation: 27 values, egocentric (needs, own motion, nearest prey, rest spot, home, nearest other creature, 8 obstacle rays).
+- **Territory rules (owner decision, plan section 15):** prey eaten in the own territory do not come back; prey eaten
+  in the rival territory re-appear in the eater's territory (raids bring food home); neutral prey respawn after
+  60–120 s. Rivals may invade; being in the rival territory costs a little (−0.01 per 0.1 s).
+
+---
+
+## 3. Walking learned with RL (locomotion brains)
+
+### Physics bodies (`sim/bodies.py`)
+- **Myrranox:** hexapod, 8 kg, 18 joints. Joint positions measured on the Blender mesh, so a physics joint angle is
+  directly a bone rotation of the rig.
+- **DC:** quadruped, 64 kg, 16 joints (hip ×2, knee, ankle per leg), measured from a side render.
+
+### Training sessions
+
+| # | Run | Result | Material |
+| --- | --- | --- | --- |
+| 1 | `myr_legs_pilot` | Foot-slip penalty swamped the task reward → stopped | learning curve |
+| 2 | `myr_legs_pilot2` | Learned to **stand still** (local optimum) → stopped | `figures/myr_legs_pilot2_1M.gif` |
+| 3 | `dc_legs_pilot` | Stopped with #2 | learning curve |
+| 4 | `myr_legs_v1` | Walks from 1M steps; **3 legs tapping at 9–12 Hz**, front legs in the air | video, figures |
+| 5 | `dc_legs_v1` | Walks and trots; **hind legs hop together**; barely turns | video, figures |
+| 6 | `myr_legs_v2` | **Insect tripod**, all 6 legs, 2.3–3.7 steps/s, symmetric turning | video, figures |
+| 7 | `dc_legs_v2` | **Diagonal walk / trot**, 1.7–2.8 steps/s | video, figures |
+
+What made v1 work (after the pilots): wider speed reward, penalties ramped in over the first 40 % of training.
+What made v2 natural: per-leg **gait clock**, reward for following the species' gait (stance legs down + swing legs up,
+scored so that standing still earns nothing), foot clearance, air time, energy and smoothness penalties, and a
+**mirror-symmetry loss** (`sim/symmetry.py`) – checked before training with an exact mirrored simulation
+(`tests/test_locomotion_v2.py`).
+
+### v1 vs v2 (final brains, same command script)
+
+| | Myrranox v1 | **Myrranox v2** | DC v1 | **DC v2** |
+| --- | --- | --- | --- | --- |
+| Gait | 3 legs, 9–12 Hz tapping | **tripod, all 6 legs** | hind legs hop together | **diagonal walk / trot** |
+| Walk / full speed (m/s) | 0.61 / 1.19 (cmd 0.6 / 1.2) | 0.53 / 1.31 | 0.76 / 2.48 (cmd 0.8 / 2.5) | 0.68 / 2.15 |
+| Turn left / right | +56 / −31 °/s (cmd ±54) | **+57 / −54** | +10 / −8 °/s (cmd ±36) | **+24 / −22** |
+| Left/right asymmetry | 11.9° | 6.0° (2.2° at full speed) | 11.6° | 6.9° (1.3° at trot) |
+| Power at full speed | high (~450 W at a walk) | **97 W** | 3.8 kW | **1.56 kW** |
+| Falls | none | none | none | none |
+
+Open: Myrranox cannot turn on the spot or walk backwards; both walk ~10–15 % slower than commanded.
+
+---
+
+## 4. Blender (`blender/`)
+
+- `habitat_showcase.blend`: habitat built from `habitat.json`, both rigs, follow cameras (switched by timeline markers).
+  Backup before rigging: `habitat_showcase_before_rig.blend`.
+- `rig_myrranox.py`: legs split into left/right parts, rigidly parented to bones placed on the physics joints.
+  `rig_dc.py`: 76k-face decimated proxy of the 970k-face sculpt with automatic weights (retopology still planned).
+- `import_trajectories.py`: plays a recording – torso bone = physics body pose, leg bones = joint angles, 50 Hz → 30 fps.
+  **Verified: bone tips match the recorded physics feet to 0.01 mm.**
+- Known issue: Myrranox textures point to `D:\FINAL MODUL\…` and are missing on this PC (renders pink).
+
+---
+
+## 5. Physics habitat world (step B, `sim/physics_world.py`)
+
+The MuJoCo world is built from the same `habitat.json`: walls and rocks are solid, several creatures share one
+simulation, each walked by its own locomotion brain. Checked: a Myrranox walking into a rock is stopped at its surface;
+the refactor left the v1 brains' results identical to the last decimal.
+
+## 6. Predator rules and balance (step C)
+
+Balance tests with two hand-written (scripted) predators, 10-minute days, several seeds:
+
+| Finding | Fix |
+| --- | --- |
+| The DC got stuck at rocks and starved: a collision set its speed to 0 and it can only turn while moving | Creatures slide along obstacles (as in the physics world); the hit penalty counts once per contact |
+| Nobody raided – with 8 prey per territory the home stock lasts a whole day | 5 prey per territory + 3 neutral; the scripted rival raids once its home stock is ≤ 2 |
+| Myrranox sprinted to raids and arrived exhausted | Scripted predators sprint only within 8 m of the prey |
+| Myrranox hunts worse than the DC (3 vs 5 prey per day, 11 % vs 0 % starving) | Prey slower (0.9 → 0.7 m/s, owner decision). Effect in the scripted test small – the Myrranox's v2 gait costs 58 % of its full-speed power just to walk (DC: 30 %), so it tires twice as fast. Watch in D1. |
+
+Movement limits for the predator brains come from what the v2 locomotion brains can really do
+(`sim/locomotion_limits.json`: no backwards / turning on the spot for the Myrranox, DC turns ≤ 40 °/s).
+Hunger and fatigue use the power curve measured from the v2 brains (`sim/energy.json`).
+
+---
+
+## 7. Videos and graphs
+
+| File | What it shows |
+| --- | --- |
+| `videos/myr_legs_v1_training.mp4`, `videos/dc_legs_v1_training.mp4` | Whole v1 walking training: every 250k checkpoint (untrained → 4M) next to the learning curve, 3:43 each |
+| `videos/myr_legs_v2_training.mp4`, `videos/dc_legs_v2_training.mp4` | Same for v2 (natural gait) |
+| `videos/*_legs_v1_vs_v2.mp4` | v1 and v2 side by side on the same commands |
+| `figures/locomotion/learning_curves_<species>.png` | Reward curves of all walking runs incl. the failed pilots |
+| `figures/locomotion/<run>/progress.gif` | All checkpoints back to back (short) |
+| `figures/locomotion/<run>/contact_sheet.png` | One frame per checkpoint |
+| `figures/locomotion/<run>/metrics.png` / `.csv` | Speed / turn tracking, restart from standstill, falls per checkpoint |
+| `figures/locomotion/<run>/<N>_steps.gif` | 12-s clip of each checkpoint |
+| `figures/gait/<run>_footfall_<speed>.png` | Footfall diagrams (dark = foot on the ground); v1 vs v2 is the clearest before/after slide |
+| `figures/gait/*_legs_v2_<N>_steps_footfall_*.png` | Gait during v2 training (1M, 1.5M, 2.75M, 3.5M) |
+| `figures/myr_legs_pilot2_1M.gif` | Pilot 2 standing still at 1M steps |
+
+Live during training: `tensorboard --logdir runs`, `python watch_locomotion.py --run <run> --species <species>`.
+
+---
+
+## 8. Lessons learned
+
+1. A penalty that is large for an untrained policy's jitter swamps the task reward (pilot 1).
+2. A narrow tracking reward plus full-strength penalties makes standing still a local optimum (pilot 2) –
+   a wider reward and a penalty curriculum fix it.
+3. A policy learns to keep walking before it learns to start walking – the evaluation checks both.
+4. Rewarding only *what* (speed) gives unnatural motion; rewarding *how* (gait clock, symmetry, energy) gives natural,
+   efficient gaits at little cost in accuracy.
+5. Test a reward before training on it: the first gait reward paid standing still 55–65 % (caught by a unit test).
+6. Mid-training setbacks recover (speed dip at 1.5M, a raised leg at 2.75M) – judge by the end, keep every checkpoint.
+7. Simulation details decide survival: a creature that can only turn while moving starved at the first rock.
+
+## 9. Next
+
+- **D1** predator brains: round 1 against scripted rivals (running), then 3 alternating rounds against the other
+  species' frozen brain. **D2** fine-tuning with the real physics bodies. **E** section 12 checks.
+  **F** Blender recording of both species hunting, with hunger/fatigue display. Then the paper and presentation.

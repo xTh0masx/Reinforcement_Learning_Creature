@@ -12,6 +12,7 @@ Hunger and fatigue rise with mechanical effort: the power of the physics body wh
 
 Observation: 27 values, egocentric (layout unchanged since stage 1). Action: forward speed, turn rate.
 """
+import dataclasses
 import json
 import math
 import os
@@ -51,6 +52,21 @@ FIGHT_RANGE = 2.0
 OBS_SIZE = 27
 NEUTRAL = "neutral"
 ENERGY_FILE = os.path.join(os.path.dirname(__file__), "energy.json")
+LIMITS_FILE = os.path.join(os.path.dirname(__file__), "locomotion_limits.json")
+
+
+def learned_species(name):
+    """Species limits as the locomotion brain can deliver them (sim/locomotion_limits.json), else the plan's."""
+    sp = SPECIES[name]
+    try:
+        with open(LIMITS_FILE) as f:
+            lim = dict(json.load(f).get(name, {}))
+    except (OSError, ValueError):
+        return sp
+    lim.pop("brain", None)
+    if "max_turn_rate_deg" in lim:
+        lim["max_turn_rate"] = math.radians(lim.pop("max_turn_rate_deg"))
+    return dataclasses.replace(sp, **{k: v for k, v in lim.items() if not k.startswith("_")})
 
 
 def _wrap(a):
@@ -68,8 +84,8 @@ def _load_energy():
 class Creature:
     """State of one predator in the habitat."""
 
-    def __init__(self, species, cid, habitat):
-        self.species = SPECIES[species]
+    def __init__(self, species, cid, habitat, learned_limits=True):
+        self.species = learned_species(species) if learned_limits else SPECIES[species]
         self.id = cid
         self.zone = self.species.home_zone
         self.home = habitat.home_zones[self.zone]
@@ -100,9 +116,10 @@ class Creature:
 class CreatureEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
 
-    def __init__(self, species="myrranox", render_mode=None, habitat_path=None, others=None):
+    def __init__(self, species="myrranox", render_mode=None, habitat_path=None, others=None, learned_limits=True):
         """others: list of {"species": "dc", "brain": None | "models/dc_brain_v1"} sharing the habitat;
-        brain None = scripted policy (sim/scripted.py)."""
+        brain None = scripted policy (sim/scripted.py). learned_limits: movement limits of the trained
+        locomotion brains (sim/locomotion_limits.json) instead of the ideal ones of sim/species.py."""
         if species not in SPECIES:
             raise ValueError(f"Unknown species {species!r}, choose from {list(SPECIES)}")
         self.habitat = Habitat.load(habitat_path)
@@ -117,7 +134,7 @@ class CreatureEnv(gym.Env):
 
         def new(sp):
             counts[sp] = counts.get(sp, 0) + 1
-            return Creature(sp, f"{sp}_{counts[sp] - 1}", self.habitat)
+            return Creature(sp, f"{sp}_{counts[sp] - 1}", self.habitat, learned_limits)
 
         self.ego = new(species)
         self.others_cfg = list(others or [])
@@ -229,7 +246,10 @@ class CreatureEnv(gym.Env):
         reward = float(sum(r.values()))
         if self.render_mode == "human":
             self.render()
-        return self._observe(ego), reward, terminated, truncated, self._info(ego, r)
+        info = self._info(ego, r)
+        if terminated or truncated:
+            info["episode_stats"] = {**ego.stats, "steps": self.t}
+        return self._observe(ego), reward, terminated, truncated, info
 
     # ------------------------------------------------------------------------------------------
     def _power_estimate(self, c):

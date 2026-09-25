@@ -1,0 +1,5 @@
+{
+  "_comment": "What the released locomotion brains can actually do (play_locomotion.py on models/*_legs_v2, 25 Sep 2026). CreatureEnv uses these instead of the ideal limits of sim/species.py, so navigation brains only ask for movements the legs can deliver.",
+  "myrranox": {"brain": "models/myr_legs_v2", "max_backward_speed": 0.0, "turn_in_place": false, "min_turn_speed": 0.3},
+  "dc": {"brain": "models/dc_legs_v2", "max_turn_rate_deg": 40.0}
+}

@@ -318,10 +318,10 @@ Done: phases 0–1 (sim, viewer, `check_env`, CartPole 500); physics bodies + `L
 tooling for the walking training.
 
 Next:
-1. ✔ `myr_legs_v1` / `dc_legs_v1` trained (4M steps each), released to `models/`, progress material and
-   whole-session videos (`docs/videos/`) made. Results: `docs/locomotion_training_log.md`.
-2. Turning: `*_legs_v2` — turn reward weight 0.5 → 1.0 and more turn-only/backward commands, resumed from v1.
-   One change per run.
+1. ✔ Locomotion v1 and v2 trained, released, documented (`docs/RESULTS.md`, `docs/locomotion_training_log.md`).
+2. ✔ B physics habitat world, ✔ C predator rules (section 15).
+3. D1 predator brains: round 1 vs scripted rivals (`*_brain_v1_r1`, running 25 Sep), then 3 alternating rounds
+   against the other species' frozen brain; D2 physics fine-tuning; E section 12 checks; F Blender recording.
 3. Train the navigation brains (`train.py`, stage 1) for both species; check against section 12.
 4. `record_physics.py` with trained navigation + locomotion brains → import into Blender → render demo.
 5. Missing Myrranox textures (`D:\FINAL MODUL\WORKFILES\SubstancePainter\T_*_BC.png`) must be relinked.
@@ -382,4 +382,10 @@ Implementation notes (25 Sep 2026, `sim/creature_env.py`, `sim/scripted.py`, `si
 - Scripted rival (`ScriptedPredator`): hunts at home, raids once its home stock is ≤ 2, walks to prey and sprints only
   within 8 m. Balance test with two scripted predators (3 seeds × 10 min): DC 4.3–5.3 prey / day, 0 % starving, ~1 raid;
   **Myrranox 2.7–3.7 prey, 11–12 % starving** — it closes in on fleeing prey at only 0.3 m/s (1.2 vs 0.9 m/s).
-  **Open (owner decision):** keep, or balance (e.g. prey flee speed 0.9 → 0.7 m/s, or a larger Myrranox catch radius).
+  **Owner decision (25 Sep): prey slower, flee speed 0.9 → 0.7 m/s.** Scripted re-test: little change (Myrranox 3.0 prey,
+  11 % starving) – the limit is fatigue: the v2 Myrranox gait costs 58 % of its full-speed power just to walk (DC 30 %).
+  To be judged with the trained predator brains (D1); fatigue rates are the next knob (owner decides).
+- Predator brains plan with the movement the v2 locomotion brains can really deliver (`sim/locomotion_limits.json`):
+  Myrranox no backwards and no turning on the spot (min. 0.3 m/s to turn), DC max 40 °/s.
+- `train.py` logs habitat statistics per episode (TensorBoard `habitat/*`: prey per 10 min, raids, starving fraction,
+  time at home / in the rival zone, hits, intruders repelled, survival).
