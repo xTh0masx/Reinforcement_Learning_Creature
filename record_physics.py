@@ -73,9 +73,10 @@ def record_creature(species, cid, loco_path, nav_path, seconds, seed, nav_writer
     nav_obs, _ = nav.reset(seed=seed)
     nav_policy = NavBrain(nav_path) if nav_path else HeuristicPolicy(nav, seed)
 
-    loco = LocomotionEnv(species, episode_seconds=1e9)
+    loco_brain = None if loco_path == "sine" else LocoBrain(loco_path, species)
+    loco = LocomotionEnv(species, episode_seconds=1e9, version=loco_brain.version if loco_brain else 1)
     lobs, _ = loco.reset(seed=seed, options={"command": (0.0, 0.0), "yaw": nav.heading})
-    loco_brain = SineGait(loco) if loco_path == "sine" else LocoBrain(loco_path, species)
+    loco_brain = loco_brain or SineGait(loco)
     offset = nav.pos - loco.data.qpos[:2]
 
     joint_cols = loco.body.joint_names

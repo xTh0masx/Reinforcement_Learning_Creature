@@ -1,6 +1,7 @@
 """Train a locomotion brain (PPO) for one species in LocomotionEnv.
 
-    python train_locomotion.py --species myrranox --steps 20_000_000 --run myr_legs_v1
+    python train_locomotion.py --species myrranox --steps 4e6 --run myr_legs_v1
+    python train_locomotion.py --species myrranox --steps 4e6 --run myr_legs_v2 --version 2   # natural gait
     tensorboard --logdir runs
 
 Saves models/<run>.zip and models/<run>_vecnormalize.pkl, plus checkpoints (step 0 = untrained brain,
@@ -15,6 +16,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
 from sim.locomotion_env import LocomotionEnv
+from sim.symmetry import SymmetricPPO, mirror_maps
 
 
 class PenaltyCurriculum(BaseCallback):
@@ -44,26 +46,32 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--resume", default=None, help="models/<run> to continue from")
     p.add_argument("--ckpt-every", type=float, default=250_000)
+    p.add_argument("--version", type=int, default=1, help="1 = original reward, 2 = natural gait + symmetry")
+    p.add_argument("--sym-weight", type=float, default=1.0, help="mirror-symmetry loss weight (version 2)")
     args = p.parse_args()
     run = args.run or f"{args.species}_legs_v1"
     torch.set_num_threads(2)
 
     env = make_vec_env(LocomotionEnv, n_envs=args.envs, seed=args.seed, vec_env_cls=SubprocVecEnv,
-                       env_kwargs={"species": args.species})
+                       env_kwargs={"species": args.species, "version": args.version})
+    algo = SymmetricPPO if args.version >= 2 else PPO
+    algo_kwargs = {"sym_weight": args.sym_weight} if args.version >= 2 else {}
     if args.resume:
         env = VecNormalize.load(f"{args.resume}_vecnormalize.pkl", env)
-        model = PPO.load(args.resume, env=env, tensorboard_log="runs/")
+        model = algo.load(args.resume, env=env, tensorboard_log="runs/")
     else:
         env = VecNormalize(env, norm_obs=True, norm_reward=True, clip_obs=10.0, gamma=0.99)
-        model = PPO(
+        model = algo(
             "MlpPolicy", env,
             n_steps=512, batch_size=1024, n_epochs=5,
             learning_rate=3e-4, gamma=0.99, gae_lambda=0.95,
             clip_range=0.2, ent_coef=0.0, max_grad_norm=1.0, target_kl=0.03,
             policy_kwargs=dict(net_arch=dict(pi=[256, 256], vf=[256, 256]),
                                activation_fn=torch.nn.ELU, log_std_init=-1.0),
-            tensorboard_log="runs/", seed=args.seed, verbose=1,
+            tensorboard_log="runs/", seed=args.seed, verbose=1, **algo_kwargs,
         )
+    if args.version >= 2:
+        model.set_mirror(mirror_maps(LocomotionEnv(args.species, version=args.version)))
 
     if not args.resume:
         model.save(f"checkpoints/{run}_0_steps")

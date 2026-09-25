@@ -5,3 +5,5 @@ myr_legs_pilot2,2026-09-25,uncommitted,myrranox,1100000,150,stopped,Foot slip /5
 dc_legs_pilot,2026-09-25,uncommitted,dc,100000,-,stopped,Same reward as myr_legs_pilot2; stopped with it
 myr_legs_v1,2026-09-25,e6020d9,myrranox,4001792,1730,walks (released),Speed reward sigma = 0.5 max speed and weight 2; penalty curriculum 20->100 % over 40 %. Final: walk 0.61/0.6 m/s; full 1.19/1.2; left turn 56/54 deg/s; right turn 31/54; no turn on spot; no backwards; restarts; no falls
 dc_legs_v1,2026-09-25,e6020d9,dc,4001792,1950,walks + trots (released),Same as myr_legs_v1. Unstable mid-training (falls at 0.75M/1.25M/1.5M). Final: walk 0.76/0.8 m/s; trot 2.48/2.5; turns only ~25 % of command; restarts; no falls
+myr_legs_v2,2026-09-25,uncommitted,myrranox,4001792,2470,tripod gait (released),v2 natural gait: gait clock + gait/clearance/air-time/energy/joint-acc rewards + mirror symmetry. Walk 0.53/0.6; full 1.31/1.2; turns +57/-54 of 54; no turn on spot/backwards; 97 W at full speed; no falls
+dc_legs_v2,2026-09-25,uncommitted,dc,4001792,2980,diagonal walk/trot (released),Same as myr_legs_v2. Walk 0.68/0.8; trot 2.15/2.5; turns 24/-22 of 36; 1.56 kW at full speed; no falls

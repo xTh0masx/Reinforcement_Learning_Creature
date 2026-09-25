@@ -53,7 +53,8 @@ def checkpoints(run):
         steps = found[-1][0] if found else 0
         from stable_baselines3 import PPO
         steps = PPO.load(f"models/{run}", device="cpu").num_timesteps
-        found = [c for c in found if c[0] < steps] + [(steps, f"models/{run}")]
+        # the last checkpoint and the final model are only a rollout apart - keep the final model
+        found = [c for c in found if c[0] < steps - 100_000] + [(steps, f"models/{run}")]
     return found
 
 
@@ -82,8 +83,9 @@ def fmt_steps(n):
 
 def evaluate(path, species, seed=0, clip=True):
     """Run the command script; return metrics and labelled clip frames (first CLIP_SECONDS)."""
-    env = LocomotionEnv(species, episode_seconds=1e6, render_mode="rgb_array", width=WIDTH, height=HEIGHT)
     brain = Brain(path, species)
+    env = LocomotionEnv(species, episode_seconds=1e6, render_mode="rgb_array", width=WIDTH, height=HEIGHT,
+                        version=brain.version)
     obs, _ = env.reset(seed=seed, options={"command": (0.0, 0.0)})
     frames, rows, t, fell_at = [], [], 0.0, None
     for seconds, v, w in command_script(species):

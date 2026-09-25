@@ -34,12 +34,21 @@ def vecnormalize_path(path):
     return f"{m.group(1)}_vecnormalize_{m.group(2)}_steps.pkl" if m else f"{path}_vecnormalize.pkl"
 
 
+def brain_version(model, species):
+    """Which LocomotionEnv version a trained brain expects, from its observation size."""
+    for v in (1, 2):
+        if LocomotionEnv(species, version=v).observation_space.shape == model.observation_space.shape:
+            return v
+    raise ValueError(f"no LocomotionEnv version matches observation shape {model.observation_space.shape}")
+
+
 class Brain:
     """Trained locomotion policy with its observation normalisation, usable step by step."""
 
     def __init__(self, path, species):
         self.model = PPO.load(path, device="cpu")
-        venv = DummyVecEnv([lambda: LocomotionEnv(species)])
+        self.version = brain_version(self.model, species)
+        venv = DummyVecEnv([lambda: LocomotionEnv(species, version=self.version)])
         self.norm = VecNormalize.load(vecnormalize_path(path), venv)
         self.norm.training = False
 
@@ -48,8 +57,8 @@ class Brain:
 
 
 def run(path, species, gif=None, seed=0):
-    env = LocomotionEnv(species, episode_seconds=1e6, render_mode="rgb_array" if gif else None)
     brain = Brain(path, species)
+    env = LocomotionEnv(species, episode_seconds=1e6, render_mode="rgb_array" if gif else None, version=brain.version)
     obs, _ = env.reset(seed=seed, options={"command": (0.0, 0.0)})
     frames, rows = [], []
     fell = False

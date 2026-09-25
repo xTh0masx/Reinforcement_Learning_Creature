@@ -9,6 +9,7 @@ from matplotlib.patches import Circle as CirclePatch, Polygon, Rectangle
 
 ZONE_COLORS = {"myrranox": "#d9a441", "dc": "#5a9e4b"}
 SPECIES_COLORS = {"myrranox": "#b5561c", "dc": "#2f6b2a"}
+PREY_COLORS = {"myrranox": "#e74c3c", "dc": "#c0392b", "neutral": "#f5b041"}   # neutral prey drawn orange
 MARKER_LENGTH = 3.0   # m, drawn larger than the real body so it stays visible on a 100 m map
 
 
@@ -26,10 +27,8 @@ class HabitatViewer:
         self._draw_static()
 
         ax = self.ax
-        self.trail_line, = ax.plot([], [], "-", lw=0.8, alpha=0.6, color="k")
-        self.prey_dots = ax.scatter([], [], s=12, c="#c0392b", zorder=4, label="prey")
-        self.body = Polygon(np.zeros((3, 2)), closed=True, zorder=5, ec="k")
-        ax.add_patch(self.body)
+        self.trails, self.bodies = {}, {}
+        self.prey_dots = ax.scatter([], [], s=14, c="#c0392b", zorder=4, label="prey", edgecolors="k", linewidths=0.3)
         self.text = ax.text(0.01, 0.99, "", transform=ax.transAxes, va="top", ha="left",
                             family="monospace", fontsize=8,
                             bbox=dict(boxstyle="round", fc="white", alpha=0.8))
@@ -54,17 +53,24 @@ class HabitatViewer:
         ax.set_ylabel("y [m]")
 
     def update(self, env):
-        trail = np.asarray(env.trail)
-        self.trail_line.set_data(trail[:, 0], trail[:, 1])
-        self.prey_dots.set_offsets(env.prey_pos[env.prey_alive] if env.prey_alive.any() else np.empty((0, 2)))
-
-        x, y, h = env.pos[0], env.pos[1], env.heading
-        L, W = MARKER_LENGTH, MARKER_LENGTH * 0.5
-        fwd, left = np.array([math.cos(h), math.sin(h)]), np.array([-math.sin(h), math.cos(h)])
-        tip = env.pos + fwd * L * 0.6
-        back = env.pos - fwd * L * 0.4
-        self.body.set_xy([tip, back + left * W / 2, back - left * W / 2])
-        self.body.set_facecolor(SPECIES_COLORS.get(env.species.name, "#333"))
+        for c in getattr(env, "creatures", [env]):
+            cid = getattr(c, "id", "ego")
+            if cid not in self.bodies:
+                color = SPECIES_COLORS.get(c.species.name, "#333")
+                self.trails[cid], = self.ax.plot([], [], "-", lw=0.8, alpha=0.6, color=color)
+                self.bodies[cid] = Polygon(np.zeros((3, 2)), closed=True, zorder=5, ec="k", fc=color,
+                                           lw=2.0 if c is getattr(env, "ego", c) else 0.5)
+                self.ax.add_patch(self.bodies[cid])
+            trail = np.asarray(c.trail)
+            self.trails[cid].set_data(trail[:, 0], trail[:, 1])
+            h, L, W = c.heading, MARKER_LENGTH, MARKER_LENGTH * 0.5
+            fwd, left = np.array([math.cos(h), math.sin(h)]), np.array([-math.sin(h), math.cos(h)])
+            tip, back = c.pos + fwd * L * 0.6, c.pos - fwd * L * 0.4
+            self.bodies[cid].set_xy([tip, back + left * W / 2, back - left * W / 2])
+        alive = env.prey_alive
+        self.prey_dots.set_offsets(env.prey_pos[alive] if alive.any() else np.empty((0, 2)))
+        if hasattr(env, "prey_area") and alive.any():
+            self.prey_dots.set_facecolor([PREY_COLORS.get(a, "#c0392b") for a in env.prey_area[alive]])
 
         s = env.stats
         self.text.set_text(
@@ -75,6 +81,9 @@ class HabitatViewer:
             f"speed {env.speed:5.2f} m/s  turn {math.degrees(env.turn_rate):6.1f} deg/s\n"
             f"activity {env.activity}\n"
             f"prey {s['prey_caught']}  hits {s['hits']}  reward {s['reward']:8.2f}"
+            + (f"
+raids {s.get('raid_prey_eaten', 0)}  stock " +
+               " ".join(f"{k[:3]}:{v}" for k, v in env.prey_stock().items()) if hasattr(env, "prey_stock") else "")
         )
         if self.interactive:
             self.fig.canvas.draw_idle()

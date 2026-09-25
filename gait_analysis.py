@@ -20,8 +20,8 @@ from sim.locomotion_env import CONTROL_DT, LocomotionEnv
 
 
 def record(path, species, speed, turn=0.0, seconds=8.0, seed=0):
-    env = LocomotionEnv(species, episode_seconds=1e9)
     brain = Brain(path, species) if path else None
+    env = LocomotionEnv(species, episode_seconds=1e9, version=brain.version if brain else 1)
     obs, _ = env.reset(seed=seed, options={"command": (speed, turn)})
     contacts, joints, slips, vs = [], [], [], []
     for _ in range(int(seconds / CONTROL_DT)):

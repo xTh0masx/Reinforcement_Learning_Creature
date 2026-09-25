@@ -124,9 +124,21 @@ def _fmt(v):
     return " ".join(f"{x:.4f}" for x in v)
 
 
-def build_mjcf(spec: BodySpec, leg_mass_fraction=0.25):
-    """MJCF string: floor + torso with free joint + 3-segment legs (nested bodies) + position actuators."""
+def _prefix_names(xml, prefix):
+    return xml.replace('name="', f'name="{prefix}') if prefix else xml
+
+
+def start_height(spec):
+    """Torso height at which the rest-pose feet just touch the floor."""
+    foot_bottom = min(leg.points[3, 2] - leg.radius * 1.2 for leg in spec.legs)
+    return spec.stand_height - foot_bottom + 0.005
+
+
+def creature_xml(spec: BodySpec, prefix="", pos=(0.0, 0.0), yaw=0.0, leg_mass_fraction=0.25):
+    """(body XML, actuator XML) for one creature. All names get `prefix`, so several creatures fit in one world.
+    The creature's own defaults (joint damping, collision classes) are set on its elements."""
     leg_mass = spec.mass * leg_mass_fraction / len(spec.legs) / 3
+    damp = f'damping="{spec.joint_damping}" armature="0.01" limited="true"'
     legs_xml = []
     for leg in spec.legs:
         p = leg.points
@@ -136,31 +148,65 @@ def build_mjcf(spec: BodySpec, leg_mass_fraction=0.25):
         for i in range(3):
             origin = p[i] - (p[i - 1] if i else 0)
             seg_from, seg_to = np.zeros(3), p[i + 1] - p[i]
-            joints = "".join(f'<joint name="{leg.name}_j{k}" axis="{_fmt(axis)}" range="{lo} {hi}"/>'
+            joints = "".join(f'<joint name="{leg.name}_j{k}" axis="{_fmt(axis)}" range="{lo} {hi}" {damp}/>'
                              for k, (seg, axis, (lo, hi)) in enumerate(leg.joints) if seg == i)
             xml += (f'<body name="{leg.name}_s{i}" pos="{_fmt(origin)}">{joints}'
                     f'<geom type="capsule" fromto="{_fmt(seg_from)} {_fmt(seg_to)}" size="{leg.radius}" '
-                    f'mass="{leg_mass:.4f}"/>')
+                    f'mass="{leg_mass:.4f}" class="creature"/>')
             closes += "</body>"
         foot = p[3] - p[2]
         xml += (f'<geom name="{leg.name}_foot" type="sphere" pos="{_fmt(foot)}" size="{leg.radius * 1.2:.4f}" '
-                f'mass="{leg_mass * 0.2:.4f}" friction="1.2 0.02 0.001"/>'
+                f'mass="{leg_mass * 0.2:.4f}" friction="1.2 0.02 0.001" class="creature"/>'
                 f'<site name="{leg.name}_foot" pos="{_fmt(foot)}" size="0.01"/>')
         legs_xml.append(xml + closes)
 
-    foot_bottom = min(leg.points[3, 2] - leg.radius * 1.2 for leg in spec.legs)
-    start_z = spec.stand_height - foot_bottom + 0.005
-    actuators = "\n".join(
-        f'<position name="{j}" joint="{j}" kp="{spec.kp}" forcerange="{-spec.max_torque} {spec.max_torque}"/>'
-        for j in spec.joint_names)
+    torso = [g.replace("<geom ", '<geom class="creature" ') for g in spec.torso_geoms]
+    quat = f"{np.cos(yaw / 2):.6f} 0 0 {np.sin(yaw / 2):.6f}"
+    body = (f'<body name="torso" pos="{pos[0]:.4f} {pos[1]:.4f} {start_height(spec):.4f}" quat="{quat}">'
+            f'<freejoint name="root"/><site name="torso_site" pos="0 0 0" size="0.01"/>'
+            f'{"".join(torso)}{"".join(legs_xml)}</body>')
+    actuators = "".join(
+        f'<position name="{prefix}{j}" joint="{prefix}{j}" kp="{spec.kp}" '
+        f'forcerange="{-spec.max_torque} {spec.max_torque}"/>' for j in spec.joint_names)
+    return _prefix_names(body, prefix), actuators
 
+
+def _habitat_xml(habitat):
+    """Walls and rocks of sim/habitat.json as static collision geometry (same shapes as build_habitat.py)."""
+    if habitat is None:
+        return ""
+    xml = []
+    t, h = 1.0, 3.0
+    cx, cy = (habitat.xmax + habitat.xmin) / 2, (habitat.ymax + habitat.ymin) / 2
+    w, d = habitat.xmax - habitat.xmin, habitat.ymax - habitat.ymin
+    for name, (x, y), (sx, sy) in (("wall_N", (cx, habitat.ymax + t / 2), (w / 2 + t, t / 2)),
+                                   ("wall_S", (cx, habitat.ymin - t / 2), (w / 2 + t, t / 2)),
+                                   ("wall_E", (habitat.xmax + t / 2, cy), (t / 2, d / 2)),
+                                   ("wall_W", (habitat.xmin - t / 2, cy), (t / 2, d / 2))):
+        xml.append(f'<geom name="{name}" type="box" pos="{x} {y} {h / 2}" size="{sx} {sy} {h / 2}" '
+                   f'class="scenery" rgba="0.28 0.25 0.22 1"/>')
+    for i, o in enumerate(habitat.obstacles):
+        xml.append(f'<geom name="rock_{i}" type="ellipsoid" pos="{o.x} {o.y} {0.2 * o.r:.3f}" '
+                   f'size="{o.r} {o.r} {0.8 * o.r:.3f}" class="scenery" rgba="0.35 0.35 0.35 1"/>')
+    return "\n    ".join(xml)
+
+
+def build_world_mjcf(creatures, habitat=None, name="world"):
+    """MJCF world: floor (+ walls and rocks from a Habitat) + several creatures.
+    creatures: list of (BodySpec, prefix, (x, y), yaw). Creatures collide with floor and scenery, not with
+    each other (contype 2 / conaffinity 1)."""
+    bodies, acts = [], []
+    for spec, prefix, pos, yaw in creatures:
+        b, a = creature_xml(spec, prefix, pos, yaw)
+        bodies.append(b)
+        acts.append(a)
     return f"""
-<mujoco model="{spec.name}">
+<mujoco model="{name}">
   <compiler angle="degree" autolimits="true"/>
   <option timestep="0.005" integrator="implicitfast"/>
   <default>
-    <joint damping="{spec.joint_damping}" armature="0.01" limited="true"/>
-    <geom contype="2" conaffinity="1" friction="0.9 0.02 0.001" rgba="0.7 0.6 0.5 1"/>
+    <default class="creature"><geom contype="2" conaffinity="1" friction="0.9 0.02 0.001" rgba="0.7 0.6 0.5 1"/></default>
+    <default class="scenery"><geom contype="1" conaffinity="1" friction="0.9 0.02 0.001"/></default>
   </default>
   <asset>
     <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1="0.45 0.40 0.33" rgb2="0.36 0.32 0.26"/>
@@ -168,19 +214,18 @@ def build_mjcf(spec: BodySpec, leg_mass_fraction=0.25):
   </asset>
   <worldbody>
     <light pos="0 0 5" dir="0 0 -1" directional="true"/>
-    <geom name="floor" type="plane" size="0 0 0.1" contype="1" conaffinity="1" material="grid"/>
-    <body name="torso" pos="0 0 {start_z:.4f}">
-      <freejoint name="root"/>
-      <site name="torso_site" pos="0 0 0" size="0.01"/>
-      {''.join(spec.torso_geoms)}
-      {''.join(legs_xml)}
-    </body>
+    <geom name="floor" type="plane" size="0 0 0.1" class="scenery" material="grid"/>
+    {_habitat_xml(habitat)}
+    {"".join(bodies)}
   </worldbody>
-  <actuator>
-{actuators}
-  </actuator>
+  <actuator>{"".join(acts)}</actuator>
 </mujoco>
 """
+
+
+def build_mjcf(spec: BodySpec):
+    """Training world: flat floor + one creature (no prefix) - used by LocomotionEnv."""
+    return build_world_mjcf([(spec, "", (0.0, 0.0), 0.0)], name=spec.name)
 
 
 if __name__ == "__main__":

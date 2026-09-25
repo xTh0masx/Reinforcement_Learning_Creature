@@ -153,9 +153,10 @@ def main():
         panel = curve_image(xs, ys, steps, total)
         panel_bg = Image.new("RGB", (PANEL_W, H), BG)
         panel_bg.paste(panel, (0, 180))
-        env = LocomotionEnv(args.species, episode_seconds=1e9, render_mode="rgb_array", width=VIEW_W, height=H)
-        env.model.vis.global_.offwidth, env.model.vis.global_.offheight = W, H
         brain = Brain(path, args.species)
+        env = LocomotionEnv(args.species, episode_seconds=1e9, render_mode="rgb_array", width=VIEW_W, height=H,
+                            version=brain.version)
+        env.model.vis.global_.offwidth, env.model.vis.global_.offheight = W, H
         obs, _ = env.reset(seed=0, options={"command": (0.0, 0.0)})
         t_clip, fell_timer, n = 0.0, 0.0, 0
         info = {"speed": 0.0, "turn_rate": 0.0}

@@ -27,10 +27,16 @@ def main():
     p.add_argument("--poll", type=float, default=10.0, help="seconds between checks for a new checkpoint")
     args = p.parse_args()
 
-    env = LocomotionEnv(args.species, episode_seconds=1e9)
+    print(f"waiting for the first checkpoint of {args.run} ...")
+    while not checkpoints(args.run):
+        time.sleep(args.poll)
+    steps, loaded = checkpoints(args.run)[-1]
+    brain = Brain(loaded, args.species)
+    env = LocomotionEnv(args.species, episode_seconds=1e9, version=brain.version)
     obs, _ = env.reset(seed=0, options={"command": (0.0, 0.0)})
+    print(f"now showing {args.run} @ {fmt_steps(steps)}")
     script = command_script(args.species)
-    brain, loaded, seg, seg_left, last_poll = None, None, 0, 0.0, 0.0
+    seg, seg_left, last_poll = 0, 0.0, time.time()
 
     with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING

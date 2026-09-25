@@ -31,7 +31,9 @@
     {"center": [ 15.0,   0.0], "radius": 1.2}
   ],
   "prey": {
-    "count": 20,
+    "_rules": "PROJECT_PLAN.md section 15: own-territory prey do not respawn, raided prey re-appear in the eater's territory, neutral prey respawn after respawn_seconds",
+    "per_territory": 5,
+    "neutral": 3,
     "radius": 0.2,
     "wander_speed": 0.3,
     "flee_speed": 0.9,

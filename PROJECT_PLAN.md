@@ -369,5 +369,17 @@ Both predators may **invade** the other's territory; food is scarce at home, so 
 Defaults chosen by Claude where the owner did not specify (change if needed):
 - The **overlap** of the two territories (around the water) counts as **neutral**.
 - A prey **stays inside the area it spawned in** (own territory A, territory B or neutral) so the stocks stay meaningful.
-- Start of an episode: 8 prey per territory, 4 neutral. Raid respawn is immediate, ≥ 10 m from the eater.
-- Hunger and fatigue rise with the **mechanical energy** the physics body spends (section 14 v2), not only with speed.
+- Start of an episode: **5 prey per territory, 3 neutral** (`habitat.json`). 8/4 was planned first, but then the home
+  stock lasts a whole 10-min episode and raids are never needed. Raid respawn is immediate, ≥ 10 m from the eater.
+- Hunger and fatigue rise with the **mechanical energy** the physics body spends (section 14 v2), not only with speed;
+  in 2D training a power curve measured from the locomotion brain is used (`calibrate_energy.py` → `sim/energy.json`).
+- Inside a rival territory only the rival-zone cost applies (not the outside-home cost on top).
+
+Implementation notes (25 Sep 2026, `sim/creature_env.py`, `sim/scripted.py`, `sim/physics_world.py`):
+- Collisions: a creature now **slides along** a rock/wall instead of stopping dead (the DC, which can only turn while
+  moving, got stuck at rocks for good and starved); the hit penalty counts once per contact. In the physics world
+  rocks and walls are solid MuJoCo geometry.
+- Scripted rival (`ScriptedPredator`): hunts at home, raids once its home stock is ≤ 2, walks to prey and sprints only
+  within 8 m. Balance test with two scripted predators (3 seeds × 10 min): DC 4.3–5.3 prey / day, 0 % starving, ~1 raid;
+  **Myrranox 2.7–3.7 prey, 11–12 % starving** — it closes in on fleeing prey at only 0.3 m/s (1.2 vs 0.9 m/s).
+  **Open (owner decision):** keep, or balance (e.g. prey flee speed 0.9 → 0.7 m/s, or a larger Myrranox catch radius).
