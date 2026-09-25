@@ -36,7 +36,7 @@ def episode(species, rival, version, policy, seed):
         elif policy == "non-hunter":
             a = non_hunter(obs, env.ego, env)
         elif policy == "stand still":
-            a = np.zeros(2)
+            a = np.array([env.speed_action(env.ego, 0.0), 0.0])
         else:
             a = rng.uniform(-1, 1, 2)
         obs, r, te, tr, _ = env.step(a)

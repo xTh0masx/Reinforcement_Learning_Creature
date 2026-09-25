@@ -40,7 +40,7 @@ class HeuristicPolicy:
         if env.fatigue > 0.7 or (env.fatigue > 0.2 and env.activity == "rest"):
             i, d = env.habitat.nearest_rest_spot(env.pos)
             if d < env.habitat.rest_spots[i].r * 0.5:
-                return np.array([0.0, 0.0])  # stop and rest
+                return np.array([env.speed_action(env.ego, 0.0), 0.0])  # stop and rest
             target = env.habitat.rest_spots[i].center
         elif env.hunger > 0.3 and visible.any():
             d = np.linalg.norm(env.prey_pos - env.pos, axis=1)
@@ -60,7 +60,7 @@ class HeuristicPolicy:
             err += 0.8 if rays[1] > rays[7] else -0.8
         turn = float(np.clip(err / math.radians(45), -1, 1))
         speed *= max(0.25, math.cos(min(abs(err), math.pi / 2)))
-        return np.array([speed, turn])
+        return np.array([env.speed_action(env.ego, speed), turn])
 
 
 def make_policy(name, env, seed):

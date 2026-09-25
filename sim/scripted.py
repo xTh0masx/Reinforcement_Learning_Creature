@@ -33,7 +33,7 @@ class ScriptedPredator:
             spots = [s for s in env.habitat.rest_spots if c.home.contains(s.center)] or env.habitat.rest_spots
             s = min(spots, key=lambda s: s.distance(c.pos))
             if s.distance(c.pos) < s.r * 0.5:
-                return np.array([0.0, 0.0])
+                return np.array([env.speed_action(c, 0.0), 0.0])
             target = s.center
         elif c.hunger > 0.3 and alive.any():
             home = alive & (env.prey_area == c.zone)
@@ -60,4 +60,4 @@ class ScriptedPredator:
             err += 0.8 if rays[1] > rays[7] else -0.8
         turn = float(np.clip(err / math.radians(45), -1, 1))
         speed *= max(0.25, math.cos(min(abs(err), math.pi / 2)))
-        return np.array([speed, turn])
+        return np.array([env.speed_action(c, speed), turn])

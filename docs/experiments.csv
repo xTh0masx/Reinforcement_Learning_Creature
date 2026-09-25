@@ -9,3 +9,7 @@ myr_legs_v2,2026-09-25,uncommitted,myrranox,4001792,2470,tripod gait (released),
 dc_legs_v2,2026-09-25,uncommitted,dc,4001792,2980,diagonal walk/trot (released),Same as myr_legs_v2. Walk 0.68/0.8; trot 2.15/2.5; turns 24/-22 of 36; 1.56 kW at full speed; no falls
 myr_brain_v1_r1,2026-09-25,070803f,myrranox,3000000,-17.3,failed,Predator round 1 vs scripted DC with plan reward (v1): learned to stay home and starve (0 prey/10 min; 43 % survival). Scripted hunter also scores negative under this reward -> reward v2
 dc_brain_v1_r1,2026-09-25,070803f,dc,3000000,-17.5,failed,Same as myr_brain_v1_r1 (0.04 prey/10 min; 45 % survival)
+myr_brain_v2_r1,2026-09-25,fba6b6d,myrranox,2800000,-3.9,failed (stopped),Reward v2 but still 0.04 prey/10 min: brain stands still. Causes: negative speed actions = stop (half the action range); shaping with gamma<1 paid ~+4/episode for standing; fleeing prey never caught by chance; sliding contact counted many hits
+dc_brain_v2_r1,2026-09-25,fba6b6d,dc,2800000,-5.3,failed (stopped),Same as myr_brain_v2_r1 (0 prey/10 min)
+pilot_myr_brain,2026-09-25,uncommitted,myrranox,400000,-19.4,learns,Fixes: speed range 0..max, undiscounted shaping, prey-flee curriculum 0->1 over 40 %, hit counted after 1 s free. Prey/10 min 0 -> 2.5, survival 31 -> 73 %
+pilot_dc_brain,2026-09-25,uncommitted,dc,400000,-7.9,learns,Same fixes. Prey/10 min 0 -> 1.8, survival 48 -> 66 %

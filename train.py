@@ -1,10 +1,10 @@
 """Train a navigation (predator) brain with PPO in CreatureEnv - PROJECT_PLAN.md sections 8 and 15.
 
     # stage 3: against a scripted rival
-    python train.py --species myrranox --rival dc --steps 3e6 --run myr_brain_v2_r1
+    python train.py --species myrranox --rival dc --steps 3e6 --run myr_brain_v3_r1
     # stage 4: against the other species' frozen brain (alternating rounds)
-    python train.py --species myrranox --rival dc --rival-brain models/dc_brain_v2_r1 --resume models/myr_brain_v2_r1 \
-        --steps 3e6 --run myr_brain_v2_r2
+    python train.py --species myrranox --rival dc --rival-brain models/dc_brain_v3_r1 --resume models/myr_brain_v3_r1 \
+        --steps 3e6 --run myr_brain_v3_r2
     tensorboard --logdir runs        # habitat/* curves: prey caught, raids, starving, time at home, intruders repelled
 """
 import argparse
@@ -17,6 +17,23 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecFrameStack, VecNormalize
 
 from sim.creature_env import CreatureEnv
+
+
+class PreyCurriculum(BaseCallback):
+    """Prey escape ability 0 -> 1 over the first `ramp` of training: at first prey do not flee, so a beginner can
+    catch one and learn that hunting pays; at full difficulty they flee at habitat.json flee_speed."""
+
+    def __init__(self, total, ramp=0.4, start=0.0):
+        super().__init__()
+        self.total, self.ramp, self.start = total, ramp, start
+
+    def _on_rollout_start(self):
+        x = self.start + (1 - self.start) * min(1.0, self.num_timesteps / (self.ramp * self.total))
+        self.training_env.env_method("set_difficulty", x)
+        self.logger.record("train/prey_difficulty", x)
+
+    def _on_step(self):
+        return True
 
 
 class HabitatStats(BaseCallback):
@@ -59,6 +76,7 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--resume", default=None, help="models/<run> to continue from (next round)")
     p.add_argument("--ckpt-every", type=float, default=500_000)
+    p.add_argument("--no-curriculum", action="store_true", help="prey at full difficulty from the start")
     args = p.parse_args()
     run = args.run or f"{args.species[:3]}_brain_v1"
     torch.set_num_threads(2)
@@ -84,7 +102,10 @@ def main():
         env.save(f"checkpoints/{run}_vecnormalize_0_steps.pkl")
     ckpt = CheckpointCallback(max(int(args.ckpt_every) // args.envs, 1), "checkpoints/", name_prefix=run,
                               save_vecnormalize=True)
-    model.learn(total_timesteps=int(args.steps), tb_log_name=run, callback=CallbackList([ckpt, HabitatStats()]),
+    callbacks = [ckpt, HabitatStats()]
+    if not args.no_curriculum:
+        callbacks.append(PreyCurriculum(int(args.steps), start=0.5 if args.resume else 0.0))
+    model.learn(total_timesteps=int(args.steps), tb_log_name=run, callback=CallbackList(callbacks),
                 reset_num_timesteps=not args.resume)
     model.save(f"models/{run}")
     env.save(f"models/{run}_vecnormalize.pkl")

@@ -40,7 +40,8 @@ R_CATCH = 1.0               # x hunger; reward v1: only when hunger > 0.5
 # Reward v2 (25 Sep 2026, round 1 of the predator training showed v1 does not teach hunting):
 R_FED = 0.01                # per step x (1 - hunger): keeping the hunger meter low is the goal itself
 SHAPING = 2.0               # potential-based guide towards visible prey when hungry (does not change the optimum)
-SHAPING_GAMMA = 0.995       # = PPO gamma in train.py
+SHAPING_GAMMA = 1.0         # undiscounted: with gamma < 1 a negative potential paid ~+4 per episode for standing still
+HIT_FREE_TIME = 1.0         # s without contact before a new obstacle contact counts as a new hit
 R_REST = 0.02
 R_OUTSIDE_HOME = -0.01      # x distance factor; not applied inside a rival territory (R_RIVAL_ZONE instead)
 R_RIVAL_ZONE = -0.01        # per step inside a rival territory (was -0.03; raids must stay possible)
@@ -107,6 +108,7 @@ class Creature:
         self.alertness = 0.0
         self.starve_steps = 0
         self._contact = False
+        self._free_time = HIT_FREE_TIME
         self.activity = "idle"
         self.trail = [self.pos.copy()]
         self.confronted = set()          # ids of rivals this creature confronted inside its territory
@@ -130,6 +132,7 @@ class CreatureEnv(gym.Env):
         self.habitat = Habitat.load(habitat_path)
         self.render_mode = render_mode
         self.reward_version = reward_version
+        self.difficulty = 1.0       # prey escape ability 0..1, ramped up during training (train.py)
         self.energy = _load_energy()
         self.observation_space = spaces.Box(-1.0, 1.0, shape=(OBS_SIZE,), dtype=np.float32)
         self.action_space = spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
@@ -195,11 +198,21 @@ class CreatureEnv(gym.Env):
         sp = c.species
         a = np.clip(np.asarray(action, dtype=float), -1.0, 1.0)
         max_fwd = sp.max_speed * (sp.tired_speed_cap if c.fatigue >= 1.0 else 1.0)
-        target_v = a[0] * max_fwd if a[0] >= 0 else a[0] * sp.max_backward_speed
+        if sp.max_backward_speed > 0:
+            target_v = a[0] * max_fwd if a[0] >= 0 else a[0] * sp.max_backward_speed
+        else:
+            target_v = (a[0] + 1.0) / 2.0 * max_fwd      # no backwards: the whole range -1..1 means 0..max speed
         turn_limit = sp.max_turn_rate
         if not sp.turn_in_place:
             turn_limit *= min(1.0, abs(c.speed) / sp.min_turn_speed)
         return float(target_v), float(a[1] * turn_limit), turn_limit
+
+    def speed_action(self, c, frac):
+        """Action value for a forward speed of `frac` x max speed (inverse of the mapping in command())."""
+        return float(frac) if c.species.max_backward_speed > 0 else 2.0 * float(frac) - 1.0
+
+    def set_difficulty(self, x):
+        self.difficulty = float(np.clip(x, 0.0, 1.0))
 
     def other_actions(self):
         """Actions of the non-ego creatures from their own observations."""
@@ -300,7 +313,8 @@ class CreatureEnv(gym.Env):
                 c.speed *= 0.5
             else:
                 c.pos = c.pos + step
-            c._hit = contact and not getattr(c, "_contact", False)     # penalise entering contact, once
+            c._hit = contact and getattr(c, "_free_time", HIT_FREE_TIME) >= HIT_FREE_TIME   # new contact only
+            c._free_time = 0.0 if contact else getattr(c, "_free_time", HIT_FREE_TIME) + DT
             c._contact = contact
             c.speed = float(c.speed)
             return self._power_estimate(c)
@@ -308,7 +322,8 @@ class CreatureEnv(gym.Env):
         c.heading, c.pos = float(body["heading"]), np.asarray(body["pos"], dtype=float)[:2].copy()
         c.speed, c.turn_rate = float(body["speed"]), float(body["turn_rate"])
         contact = not self.habitat.is_free(c.pos, sp.body_radius * 0.6)
-        c._hit = contact and not getattr(c, "_contact", False)
+        c._hit = contact and getattr(c, "_free_time", HIT_FREE_TIME) >= HIT_FREE_TIME
+        c._free_time = 0.0 if contact else getattr(c, "_free_time", HIT_FREE_TIME) + DT
         c._contact = contact
         return body["energy"] / DT if "energy" in body else self._power_estimate(c)
 
@@ -469,11 +484,12 @@ class CreatureEnv(gym.Env):
         dist = np.linalg.norm(diff, axis=2)
         nearest = np.argmin(dist, axis=1)
         away = diff[np.arange(len(self.prey_pos)), nearest]
-        flee = alive & (dist.min(axis=1) < cfg["flee_radius"])
+        flee = alive & (dist.min(axis=1) < cfg["flee_radius"]) & (self.difficulty > 0)
         wander = alive & ~flee
         self.prey_heading[wander] += rng.normal(0.0, 1.0, size=wander.sum()) * math.sqrt(DT)
         self.prey_heading[flee] = np.arctan2(away[flee, 1], away[flee, 0]) + rng.normal(0.0, 0.3, size=flee.sum())
-        speed = np.where(flee, cfg["flee_speed"], cfg["wander_speed"])
+        speed = np.where(flee, cfg["wander_speed"] + self.difficulty * (cfg["flee_speed"] - cfg["wander_speed"]),
+                         cfg["wander_speed"])
 
         step = (speed * DT)[:, None] * np.stack([np.cos(self.prey_heading), np.sin(self.prey_heading)], axis=1)
         cand = self.prey_pos + step
