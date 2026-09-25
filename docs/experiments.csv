@@ -7,3 +7,5 @@ myr_legs_v1,2026-09-25,e6020d9,myrranox,4001792,1730,walks (released),Speed rewa
 dc_legs_v1,2026-09-25,e6020d9,dc,4001792,1950,walks + trots (released),Same as myr_legs_v1. Unstable mid-training (falls at 0.75M/1.25M/1.5M). Final: walk 0.76/0.8 m/s; trot 2.48/2.5; turns only ~25 % of command; restarts; no falls
 myr_legs_v2,2026-09-25,uncommitted,myrranox,4001792,2470,tripod gait (released),v2 natural gait: gait clock + gait/clearance/air-time/energy/joint-acc rewards + mirror symmetry. Walk 0.53/0.6; full 1.31/1.2; turns +57/-54 of 54; no turn on spot/backwards; 97 W at full speed; no falls
 dc_legs_v2,2026-09-25,uncommitted,dc,4001792,2980,diagonal walk/trot (released),Same as myr_legs_v2. Walk 0.68/0.8; trot 2.15/2.5; turns 24/-22 of 36; 1.56 kW at full speed; no falls
+myr_brain_v1_r1,2026-09-25,070803f,myrranox,3000000,-17.3,failed,Predator round 1 vs scripted DC with plan reward (v1): learned to stay home and starve (0 prey/10 min; 43 % survival). Scripted hunter also scores negative under this reward -> reward v2
+dc_brain_v1_r1,2026-09-25,070803f,dc,3000000,-17.5,failed,Same as myr_brain_v1_r1 (0.04 prey/10 min; 45 % survival)

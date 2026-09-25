@@ -36,7 +36,11 @@ DIST_SCALE = 50.0           # m, normalisation for rest-spot / home-zone / other
 MOVING_SPEED = 0.05         # m/s, below this the creature counts as standing still
 
 # Rewards (section 8, rebalanced in section 15)
-R_CATCH = 1.0               # x hunger, only when hunger > 0.5
+R_CATCH = 1.0               # x hunger; reward v1: only when hunger > 0.5
+# Reward v2 (25 Sep 2026, round 1 of the predator training showed v1 does not teach hunting):
+R_FED = 0.01                # per step x (1 - hunger): keeping the hunger meter low is the goal itself
+SHAPING = 2.0               # potential-based guide towards visible prey when hungry (does not change the optimum)
+SHAPING_GAMMA = 0.995       # = PPO gamma in train.py
 R_REST = 0.02
 R_OUTSIDE_HOME = -0.01      # x distance factor; not applied inside a rival territory (R_RIVAL_ZONE instead)
 R_RIVAL_ZONE = -0.01        # per step inside a rival territory (was -0.03; raids must stay possible)
@@ -116,7 +120,8 @@ class Creature:
 class CreatureEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
 
-    def __init__(self, species="myrranox", render_mode=None, habitat_path=None, others=None, learned_limits=True):
+    def __init__(self, species="myrranox", render_mode=None, habitat_path=None, others=None, learned_limits=True,
+                 reward_version=2):
         """others: list of {"species": "dc", "brain": None | "models/dc_brain_v1"} sharing the habitat;
         brain None = scripted policy (sim/scripted.py). learned_limits: movement limits of the trained
         locomotion brains (sim/locomotion_limits.json) instead of the ideal ones of sim/species.py."""
@@ -124,6 +129,7 @@ class CreatureEnv(gym.Env):
             raise ValueError(f"Unknown species {species!r}, choose from {list(SPECIES)}")
         self.habitat = Habitat.load(habitat_path)
         self.render_mode = render_mode
+        self.reward_version = reward_version
         self.energy = _load_energy()
         self.observation_space = spaces.Box(-1.0, 1.0, shape=(OBS_SIZE,), dtype=np.float32)
         self.action_space = spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
@@ -214,6 +220,7 @@ class CreatureEnv(gym.Env):
         acts = dict(actions or self.other_actions())
         acts[self.ego.id] = action
         before = {c.id: (c.hunger, c.fatigue) for c in self.creatures}
+        phi_before = {c.id: self._potential(c) for c in self.creatures} if self.reward_version >= 2 else {}
         rewards = {c.id: {} for c in self.creatures}
 
         # --- movement ---
@@ -233,6 +240,9 @@ class CreatureEnv(gym.Env):
         for c in self.creatures:
             self._needs(c, caught.get(c.id, False))
             self._rewards(c, rewards[c.id], before[c.id][1])
+            if self.reward_version >= 2:
+                rewards[c.id]["fed"] = R_FED * (1.0 - c.hunger)
+                rewards[c.id]["hunt_guide"] = SHAPING_GAMMA * self._potential(c) - phi_before[c.id]
 
         self.t += 1
         ego, r = self.ego, rewards[self.ego.id]
@@ -252,6 +262,15 @@ class CreatureEnv(gym.Env):
         return self._observe(ego), reward, terminated, truncated, info
 
     # ------------------------------------------------------------------------------------------
+    def _potential(self, c):
+        """Shaping potential: the hungrier, the more it pays to be close to the nearest visible prey."""
+        d = PREY_SENSE_RANGE
+        if self.prey_alive.any():
+            dist = np.linalg.norm(self.prey_pos - c.pos, axis=1)
+            dist[~self.prey_alive] = np.inf
+            d = min(float(dist.min()), PREY_SENSE_RANGE)
+        return -SHAPING * c.hunger * d / PREY_SENSE_RANGE
+
     def _power_estimate(self, c):
         cal = self.energy.get(c.species.name)
         if not cal:
@@ -497,7 +516,7 @@ class CreatureEnv(gym.Env):
             c.hunger = max(0.0, c.hunger - c.species.hunger_per_prey)
             c.stats["prey_caught"] += 1
             caught[c.id] = True
-            if before[c.id][0] > 0.5:
+            if self.reward_version >= 2 or before[c.id][0] > 0.5:
                 rewards[c.id]["catch"] = R_CATCH * before[c.id][0]
         return caught
 

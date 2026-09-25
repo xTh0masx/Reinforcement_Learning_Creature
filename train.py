@@ -1,10 +1,10 @@
 """Train a navigation (predator) brain with PPO in CreatureEnv - PROJECT_PLAN.md sections 8 and 15.
 
     # stage 3: against a scripted rival
-    python train.py --species myrranox --rival dc --steps 3e6 --run myr_brain_v1_r1
+    python train.py --species myrranox --rival dc --steps 3e6 --run myr_brain_v2_r1
     # stage 4: against the other species' frozen brain (alternating rounds)
-    python train.py --species myrranox --rival dc --rival-brain models/dc_brain_v1_r1 --resume models/myr_brain_v1_r1 \
-        --steps 3e6 --run myr_brain_v1_r2
+    python train.py --species myrranox --rival dc --rival-brain models/dc_brain_v2_r1 --resume models/myr_brain_v2_r1 \
+        --steps 3e6 --run myr_brain_v2_r2
     tensorboard --logdir runs        # habitat/* curves: prey caught, raids, starving, time at home, intruders repelled
 """
 import argparse
