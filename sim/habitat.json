@@ -1,0 +1,42 @@
+{
+  "_comment": "Shared map for Python (sim/habitat.py) and Blender (blender/scripts/build_habitat.py). Metres, origin at the map centre, +x east, +y north.",
+  "boundary": {"xmin": -50.0, "xmax": 50.0, "ymin": -50.0, "ymax": 50.0},
+  "home_zones": {
+    "myrranox": {"type": "circle", "center": [-20.0, -15.0], "radius": 28.0, "terrain": "sand_rock"},
+    "dc":       {"type": "circle", "center": [20.0, 15.0],   "radius": 28.0, "terrain": "vegetation"}
+  },
+  "water": {"type": "circle", "center": [0.0, 0.0], "radius": 4.0},
+  "rest_spots": [
+    {"center": [-30.0, -28.0], "radius": 2.0, "kind": "burrow"},
+    {"center": [-12.0, -30.0], "radius": 2.0, "kind": "burrow"},
+    {"center": [-32.0,  -5.0], "radius": 2.0, "kind": "burrow"},
+    {"center": [30.0,   28.0], "radius": 2.0, "kind": "shade"},
+    {"center": [12.0,   30.0], "radius": 2.0, "kind": "shade"},
+    {"center": [32.0,    5.0], "radius": 2.0, "kind": "shade"}
+  ],
+  "obstacles": [
+    {"center": [-25.0, -20.0], "radius": 2.5},
+    {"center": [-10.0, -10.0], "radius": 1.5},
+    {"center": [-35.0, -35.0], "radius": 3.0},
+    {"center": [ -5.0, -35.0], "radius": 2.0},
+    {"center": [-38.0,  10.0], "radius": 2.0},
+    {"center": [ 25.0,  20.0], "radius": 2.5},
+    {"center": [ 10.0,  10.0], "radius": 1.5},
+    {"center": [ 35.0,  35.0], "radius": 3.0},
+    {"center": [  5.0,  35.0], "radius": 2.0},
+    {"center": [ 38.0, -10.0], "radius": 2.0},
+    {"center": [-20.0,  20.0], "radius": 3.0},
+    {"center": [ 20.0, -20.0], "radius": 3.0},
+    {"center": [  0.0,  15.0], "radius": 1.5},
+    {"center": [ 15.0,   0.0], "radius": 1.2}
+  ],
+  "prey": {
+    "count": 20,
+    "radius": 0.2,
+    "wander_speed": 0.3,
+    "flee_speed": 0.9,
+    "flee_radius": 5.0,
+    "respawn_seconds": [60.0, 120.0],
+    "respawn_min_distance": 10.0
+  }
+}

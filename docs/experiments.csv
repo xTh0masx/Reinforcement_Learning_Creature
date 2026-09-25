@@ -1,0 +1,7 @@
+run_id,date,commit,species,steps,final_reward,verdict,notes
+cartpole_smoke,2026-09-23,uncommitted,-,100000,500 (eval),pass,Phase 0 smoke test; PPO zoo hyperparameters
+myr_legs_pilot,2026-09-25,uncommitted,myrranox,330000,-1800,stopped,Foot-slip penalty dominated (-2.3/step); claw contacts counted as body contact
+myr_legs_pilot2,2026-09-25,uncommitted,myrranox,1100000,150,stopped,Foot slip /5 + capped; torso-only contact penalty. Learned to stand still (0.00 m/s at 0.6 m/s command)
+dc_legs_pilot,2026-09-25,uncommitted,dc,100000,-,stopped,Same reward as myr_legs_pilot2; stopped with it
+myr_legs_v1,2026-09-25,uncommitted,myrranox,4000000,running,walks from 1M,Speed reward sigma = 0.5 max speed and weight 2; penalty curriculum 20->100 % over 40 %; speed error 0.1 m/s at 2M
+dc_legs_v1,2026-09-25,uncommitted,dc,4000000,running,unstable,Same as myr_legs_v1; falls at 0.75M/1.25M/1.5M; no restart from standstill at 2.25M

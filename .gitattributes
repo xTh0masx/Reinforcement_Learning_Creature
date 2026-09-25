@@ -1,0 +1,8 @@
+# Large binary assets go through Git LFS
+*.blend filter=lfs diff=lfs merge=lfs -text
+blender/**/*.png filter=lfs diff=lfs merge=lfs -text
+blender/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+blender/**/*.exr filter=lfs diff=lfs merge=lfs -text
+blender/**/*.tga filter=lfs diff=lfs merge=lfs -text
+blender/**/*.fbx filter=lfs diff=lfs merge=lfs -text
+docs/figures/**/*.gif filter=lfs diff=lfs merge=lfs -text

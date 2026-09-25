@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Training output (large, reproducible)
+runs/
+checkpoints/
+logs/
+
+# Blender backups
+*.blend1
+*.blend2
+
+# PyCharm (user-specific)
+.idea/workspace.xml
+.idea/shelf/
+.idea/usage.statistics.xml
+
+# OS
+.DS_Store
+Thumbs.db
