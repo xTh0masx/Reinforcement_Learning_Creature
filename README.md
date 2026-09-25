@@ -54,6 +54,14 @@ python locomotion_progress.py --run myr_legs_v1 --species myrranox
 
 Output goes to `docs/figures/locomotion/<run>/`.
 
+```bash
+# Whole training session as a video: every checkpoint (untrained -> 4M) next to the learning curve
+python make_training_video.py --run myr_legs_v1 --species myrranox     # -> docs/videos/myr_legs_v1_training.mp4
+
+# Watch a run live while it trains (MuJoCo window, switches to each new checkpoint)
+python watch_locomotion.py --run myr_legs_v1 --species myrranox
+```
+
 ## Record and play back in Blender
 
 ```bash
@@ -89,17 +97,20 @@ Debug stand-ins (not RL): `record.py --policy heuristic` (scripted navigation, g
 | `sim/locomotion_env.py` | Locomotion env: command tracking with the physics body |
 | `train.py`, `train_locomotion.py` | PPO training (navigation / locomotion) |
 | `play_locomotion.py`, `locomotion_progress.py` | Evaluation, GIFs, progress material |
+| `make_training_video.py`, `watch_locomotion.py` | Training-session videos (`docs/videos/`), live viewer |
 | `record.py`, `record_physics.py` | Recordings for Blender (10 Hz CSV + 50 Hz pose CSV per creature) |
 | `blender/scripts/` | `build_habitat.py`, `import_trajectories.py`, `rig_myrranox.py`, `rig_dc.py`, `rig_common.py` |
 | `blender/habitat_showcase.blend` | Scene with habitat, rigs and cameras (Git LFS); `_before_rig.blend` = backup |
 | `models/`, `recordings/` | Released brains and recordings |
-| `docs/` | `experiments.csv`, `locomotion_training_log.md`, `figures/` |
+| `docs/` | `experiments.csv`, `locomotion_training_log.md`, `figures/`, `videos/` (MP4 via Git LFS) |
 | `runs/`, `checkpoints/`, `logs/` | TensorBoard logs, checkpoints, training stdout (gitignored) |
 
 ## Status (25 Sep 2026)
 
 - Habitat sim, navigation env, physics bodies, locomotion env, rigs and Blender playback: done and tested
   (Blender bone tips match the physics feet to 0.01 mm).
-- Locomotion brains `myr_legs_v1` / `dc_legs_v1`: training. Myrranox walks from 1M steps (speed error ≈ 0.1 m/s
-  at 2M); DC still unstable at 2.25M.
+- Locomotion brains `models/myr_legs_v1`, `models/dc_legs_v1` (4M steps each): **both walk** and never fell in the
+  evaluation. Forward speed is tracked within ~0.05 m/s (DC trots at 2.5 m/s), both stop and restart. Turning is
+  weak (Myrranox right turns ~60 %, no turning on the spot or backwards; DC turns ~25 % of the command).
+  Details: [docs/locomotion_training_log.md](docs/locomotion_training_log.md); whole-session videos in `docs/videos/`.
 - Navigation brains: not trained yet (`train.py` ready).

@@ -6,3 +6,4 @@ blender/**/*.exr filter=lfs diff=lfs merge=lfs -text
 blender/**/*.tga filter=lfs diff=lfs merge=lfs -text
 blender/**/*.fbx filter=lfs diff=lfs merge=lfs -text
 docs/figures/**/*.gif filter=lfs diff=lfs merge=lfs -text
+docs/videos/*.mp4 filter=lfs diff=lfs merge=lfs -text

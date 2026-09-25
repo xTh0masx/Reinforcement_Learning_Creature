@@ -242,7 +242,7 @@ env.save("models/myr_brain_v1_vecnormalize.pkl")
 | --- | --- | --- | --- | --- | --- |
 | 0 | Setup | Gymnasium + SB3 installed ✔; add tensorboard; repo structure; PPO on `CartPole-v1` as smoke test | CartPole reaches 500 | 1 day | ✔ done (500.0) |
 | 1 | Habitat sim | `CreatureEnv`: 2D map, one creature, prey, home zone, needs, matplotlib viewer; `check_env` | Random-action creature runs in viewer | 1 week | ✔ done |
-| 1b | Locomotion (new) | Physics bodies, `LocomotionEnv`, train walking for both species | Follows speed/turn commands without falling | – | in progress: Myrranox walks, DC unstable |
+| 1b | Locomotion (new) | Physics bodies, `LocomotionEnv`, train walking for both species | Follows speed/turn commands without falling | – | v1 done: both walk, no falls; turning weak → v2 |
 | 2 | Brain – one species | Train Myrranox alone, then DC; tune rewards | Endemic rules met for one creature | 1–2 weeks | `train.py` ready, not trained |
 | 3 | Blender – Myrranox | Rig, import script (walk cycles superseded by physics playback) | Walks a recorded path without foot sliding | 1–2 weeks | rig + playback done; waiting for final brain |
 | 4 | Blender – DC | Retopo, bake, rig (cycles superseded) | Same as phase 3 | 2–3 weeks | proxy rig + playback done; retopo/bake open |
@@ -318,9 +318,10 @@ Done: phases 0–1 (sim, viewer, `check_env`, CartPole 500); physics bodies + `L
 tooling for the walking training.
 
 Next:
-1. Finish `myr_legs_v1` / `dc_legs_v1` (4M steps each); run `locomotion_progress.py` for both; release to `models/`.
-2. DC: if still falling or unable to restart at 4M → continue training (`--resume`) or adjust (lower `action_scale`,
-   more standing/restart commands). One change per run.
+1. ✔ `myr_legs_v1` / `dc_legs_v1` trained (4M steps each), released to `models/`, progress material and
+   whole-session videos (`docs/videos/`) made. Results: `docs/locomotion_training_log.md`.
+2. Turning: `*_legs_v2` — turn reward weight 0.5 → 1.0 and more turn-only/backward commands, resumed from v1.
+   One change per run.
 3. Train the navigation brains (`train.py`, stage 1) for both species; check against section 12.
 4. `record_physics.py` with trained navigation + locomotion brains → import into Blender → render demo.
 5. Missing Myrranox textures (`D:\FINAL MODUL\WORKFILES\SubstancePainter\T_*_BC.png`) must be relinked.
@@ -343,6 +344,30 @@ Next:
 - **Coupling** `record_physics.py`: every 0.1 s the navigation brain's action → speed/turn command → 5 locomotion steps → the body's real pose goes back into `CreatureEnv` (`step(action, body=...)`). Rocks/walls exist only in the habitat; on a hit the body is pushed back. Outputs the 10 Hz CSV plus a 50 Hz `<csv>_<id>_pose.csv` (body position, quaternion, joint angles, feet).
 - **Blender** `import_trajectories.py` keys the rig from the pose file (torso bone = body pose, leg bones = joint angles, resampled to 30 fps). Verified: bone tips match the physics feet to 0.01 mm.
 - `record.py --policy heuristic` and `record_physics.py --loco sine` are debugging stand-ins, not RL.
-- **Lessons so far:** (1) a penalty that is large for the untrained policy's jitter (foot slip) swamps the task reward;
+- **Results v1 (4M steps each, 25 Sep 2026):** Myrranox walk 0.61/0.6 m/s, full speed 1.19/1.2, left turn 56/54 °/s,
+  right turn 31/54 °/s, no turning on the spot, no backwards. DC walk 0.76/0.8 m/s, trot 2.48/2.5 m/s, turns ≈ 25 % of
+  the command. Both stop, restart and never fell. Videos of the whole training: `docs/videos/<run>_training.mp4`.
+- **Lessons:** (1) a penalty that is large for the untrained policy's jitter (foot slip) swamps the task reward;
   (2) a narrow tracking reward plus full penalties makes standing still a local optimum; (3) the policy can learn to
-  walk once moving before it learns to start from standstill — the evaluation checks both.
+  walk once moving before it learns to start from standstill — the evaluation checks both; (4) turning is learned last
+  and least (small turn weight, fewer turn commands).
+
+---
+
+## 15. Territory, prey and rival rules (decided 25 Sep 2026, owner)
+
+Both predators may **invade** the other's territory; food is scarce at home, so raids are part of survival.
+
+| Rule | Decision |
+| --- | --- |
+| Prey eaten in the **own** territory | **No respawn** – the home stock shrinks |
+| Prey eaten in the **rival** territory | A new prey spawns **in the eater's own territory** (raids bring food home) |
+| Prey eaten in the **neutral** area (inside neither territory) | Respawns after 60–120 s in the neutral area (old rule) |
+| Rival-territory cost | Kept but small: −0.01 per step (was −0.03), so raids are short and purposeful |
+| Rival | **Present during training**: both species share one world, trained in turns against the other's current (frozen) brain (section 8, training stage 4), incl. the defence rewards (confront intruder, intruder leaves, fight risk < 2 m) |
+
+Defaults chosen by Claude where the owner did not specify (change if needed):
+- The **overlap** of the two territories (around the water) counts as **neutral**.
+- A prey **stays inside the area it spawned in** (own territory A, territory B or neutral) so the stocks stay meaningful.
+- Start of an episode: 8 prey per territory, 4 neutral. Raid respawn is immediate, ≥ 10 m from the eater.
+- Hunger and fatigue rise with the **mechanical energy** the physics body spends (section 14 v2), not only with speed.
