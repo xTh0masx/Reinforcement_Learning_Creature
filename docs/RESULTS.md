@@ -153,6 +153,11 @@ in each camera view).
 - Hunger/fatigue in the physics world use the same power curve as the 2D training (speed/turn → power): the body's
   instantaneous power includes controller effort for every command change and starved the Myrranox in 132 s.
 
+**Update 26 Sep (owner):** prey at half speed; the showcase was re-recorded for 5 min – the Myrranox now catches prey
+with its real legs and survives the whole recording (1 prey), the DC catches 3. Blender: steady side camera per
+creature, overview camera, panel "Creatures" (side views, follow + free orbit, both side by side after splitting the
+3D view). Preview: `figures/showcase_side_by_side.png`.
+
 ## 7. Videos and graphs
 
 | File | What it shows |

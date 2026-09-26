@@ -386,6 +386,8 @@ Implementation notes (25 Sep 2026, `sim/creature_env.py`, `sim/scripted.py`, `si
 - Scripted rival (`ScriptedPredator`): hunts at home, raids once its home stock is ≤ 2, walks to prey and sprints only
   within 8 m. Balance test with two scripted predators (3 seeds × 10 min): DC 4.3–5.3 prey / day, 0 % starving, ~1 raid;
   **Myrranox 2.7–3.7 prey, 11–12 % starving** — it closes in on fleeing prey at only 0.3 m/s (1.2 vs 0.9 m/s).
+  **Owner decision (26 Sep): prey at half speed – wander 0.3 → 0.15 m/s, flee 0.7 → 0.35 m/s** (the predator brains
+  were trained with 0.7; with slower prey the Myrranox catches prey in the physics showcase and survives 5 min).
   **Owner decision (25 Sep): prey slower, flee speed 0.9 → 0.7 m/s.** Scripted re-test: little change (Myrranox 3.0 prey,
   11 % starving) – the limit is fatigue: the v2 Myrranox gait costs 58 % of its full-speed power just to walk (DC 30 %).
   To be judged with the trained predator brains (D1); fatigue rates are the next knob (owner decides).
