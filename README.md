@@ -63,6 +63,28 @@ python make_training_video.py --run myr_legs_v1 --species myrranox     # -> docs
 python watch_locomotion.py --run myr_legs_v1 --species myrranox
 ```
 
+## Evaluate predator brains
+
+```bash
+python evaluate.py --species dc --brain models/dc_brain_v4_r1 --rival myrranox        # section 12 checks
+python evaluate.py --species dc --brain scripted --rival myrranox                     # baseline
+python watch_predator.py --run dc_brain_v4_r1 --species dc --rival myrranox            # live top-down view
+```
+
+## Showcase: both predators with real legs
+
+```bash
+python record_world.py --minutes 5 --pick-seed 8 --out recordings/showcase.csv
+```
+
+In Blender import it (below), then use the sidebar panel **Creatures** (N key). Render the side-by-side video:
+
+```bash
+blender -b blender/habitat_showcase.blend --python blender/scripts/render_camera.py -- --camera SideCam_myrranox_0 --out renders/showcase/myrranox
+blender -b blender/habitat_showcase.blend --python blender/scripts/render_camera.py -- --camera SideCam_dc_0 --out renders/showcase/dc
+python make_side_by_side.py
+```
+
 ## Record and play back in Blender
 
 ```bash
@@ -112,15 +134,20 @@ Debug stand-ins (not RL): `record.py --policy heuristic` (scripted navigation, g
 | `docs/` | `experiments.csv`, `locomotion_training_log.md`, `figures/`, `videos/` (MP4 via Git LFS) |
 | `runs/`, `checkpoints/`, `logs/` | TensorBoard logs, checkpoints, training stdout (gitignored) |
 
-## Status (25 Sep 2026)
+## Status (26 Sep 2026)
 
-- Habitat sim, navigation env, physics bodies, locomotion env, rigs and Blender playback: done and tested
-  (Blender bone tips match the physics feet to 0.01 mm).
-- Locomotion brains `models/myr_legs_v1`, `models/dc_legs_v1` (4M steps each): **both walk** and never fell in the
-  evaluation. Forward speed is tracked within ~0.05 m/s (DC trots at 2.5 m/s), both stop and restart. Turning is
-  weak (Myrranox right turns ~60 %, no turning on the spot or backwards; DC turns ~25 % of the command).
-  Details: [docs/locomotion_training_log.md](docs/locomotion_training_log.md); whole-session videos in `docs/videos/`.
-- Locomotion **v2** (`models/*_legs_v2`): natural gait – insect tripod / quadruped walk→trot, symmetric turning,
-  2.4–5× less energy, no falls. v1 vs v2 and the whole story: **[docs/RESULTS.md](docs/RESULTS.md)**.
-- Physics habitat world and predator rules (territories, raids, energy-driven hunger, rival) done.
-- Predator (navigation) brains: round 1 against scripted rivals training (`*_brain_v1_r1`).
+| Part | State |
+| --- | --- |
+| Habitat sim, rules (territories, raids, energy-driven hunger), physics habitat world | done, tested |
+| Walking brains | **v2 released** (`models/*_legs_v2`): insect tripod / quadruped walk→trot, symmetric, efficient, no falls |
+| Predator brains | **DC `models/dc_brain_v4_r1`** (4/5 section 12 checks); **Myrranox `models/myr_brain_v3_r1`** (hunts, but starves when its home is empty; fails with real legs) |
+| Blender | rigs, pose playback (0.01 mm), steady side cameras, overview, panel "Creatures", hunger/fatigue display |
+| Showcase | `docs/videos/showcase_side_by_side.mp4` (5:00, both creatures side by side) |
+| Open | raids/defence, Myrranox turning on the spot, 2+2 creatures, textures, paper/slides |
+
+What happened and all results: **[docs/RESULTS.md](docs/RESULTS.md)** · changes: [docs/CHANGELOG.md](docs/CHANGELOG.md) ·
+walking: [docs/locomotion_training_log.md](docs/locomotion_training_log.md) ·
+predators: [docs/predator_training_log.md](docs/predator_training_log.md).
+
+Note: training runs inside the Claude Code session; closing the app stops it. Resume with
+`train.py --resume checkpoints/<run>_<N>_steps --steps <remaining>`.

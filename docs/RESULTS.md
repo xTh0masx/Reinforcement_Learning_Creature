@@ -1,7 +1,9 @@
 # Endemic Creatures – what we did and what came out
 
-Status: 25 Sep 2026 · Project plan: [PROJECT_PLAN.md](../PROJECT_PLAN.md) · Walking training details:
-[locomotion_training_log.md](locomotion_training_log.md) · Every training run: [experiments.csv](experiments.csv)
+Status: 26 Sep 2026 · Project plan: [PROJECT_PLAN.md](../PROJECT_PLAN.md) · Walking training:
+[locomotion_training_log.md](locomotion_training_log.md) · Predator training:
+[predator_training_log.md](predator_training_log.md) · All changes: [CHANGELOG.md](CHANGELOG.md) ·
+Every training run: [experiments.csv](experiments.csv)
 
 Two predator species from a Blender scene – **Myrranox** (6-legged arthropod, 1.5 m long) and **DC_SKIN_RAW**
 (quadruped, 1.3 m tall) – live in one 100 × 100 m habitat. **Everything they do is learned with reinforcement
@@ -31,7 +33,12 @@ The recorded body pose and joint angles are played back on the rigged models in 
 | 25 Sep | Locomotion **v2** – natural gait (4M steps each) | Insect tripod / quadruped walk→trot, symmetric, 2.4–5× less energy |
 | 25 Sep | **B** physics habitat world; **C** predator rules (territories, raids, energy-driven hunger, rival) | Tested; two design problems found and fixed |
 | 25 Sep | Prey made slower (0.9 → 0.7 m/s, owner decision); **D1** predator brains started | two failed attempts, then learning |
-| 26 Sep | D1 round 1 + option B; DC predator brain released; showcase recording in Blender | DC hunts with real legs; Myrranox fails in physics |
+| 25–26 Sep | Predator round 1 (3M): interrupted by the session end at 1.75M, resumed from the 1.5M checkpoint | Both hunt (4.0–4.4 prey / 10 min) but never raid, rest or defend |
+| 26 Sep | Option B (home-stock + intruder inputs, lean days, invading rival, fatigue from 70 %) | DC much better – **released** (`dc_brain_v4_r1`); Myrranox worse → keep `myr_brain_v3_r1` (owner) |
+| 26 Sep | Showcase: both predator brains + v2 walking brains in the physics habitat → Blender | DC hunts with real legs; Myrranox cannot turn on the spot and starves (owner: show as is) |
+| 26 Sep | Blender: steady side cameras, overview, panel "Creatures", hunger/fatigue display (owner request) | Clear side view of the leg motion; free viewing of both creatures |
+| 26 Sep | Prey at half speed (owner decision); showcase re-recorded (5 min) | Myrranox catches prey and survives; DC catches 3 |
+| 26 Sep | Showcase rendered side by side (5:00) | `docs/videos/showcase_side_by_side.mp4` |
 
 ---
 
@@ -91,15 +98,27 @@ Open: Myrranox cannot turn on the spot or walk backwards; both walk ~10–15 % s
 
 ## 4. Blender (`blender/`)
 
-- `habitat_showcase.blend`: habitat built from `habitat.json`, both rigs, follow cameras (switched by timeline markers).
-  Backup before rigging: `habitat_showcase_before_rig.blend`.
+- `habitat_showcase.blend`: habitat built from `habitat.json`, both rigs, the showcase recording (5 min), cameras and
+  the viewing panel. Backup before rigging: `habitat_showcase_before_rig.blend`.
 - `rig_myrranox.py`: legs split into left/right parts, rigidly parented to bones placed on the physics joints.
   `rig_dc.py`: 76k-face decimated proxy of the 970k-face sculpt with automatic weights (retopology still planned).
 - `import_trajectories.py`: plays a recording – torso bone = physics body pose, leg bones = joint angles, 50 Hz → 30 fps.
   **Verified: bone tips match the recorded physics feet to 0.01 mm.**
-- Known issue: Myrranox textures point to `D:\FINAL MODUL\…` and are missing on this PC (renders pink).
+- **Cameras (26 Sep):** per creature a steady side camera (`SideCam_<id>`, beside the body at body height, position and
+  heading smoothed over 0.7 s / 3 s) with a hunger/fatigue display in the image; `Overview_cam` over the whole habitat.
+  No automatic camera switching.
+- **Panel "Creatures"** (3D view sidebar, N key; stored in the .blend, Blender asks to allow scripts):
 
----
+  | Button | Effect |
+  | --- | --- |
+  | Both side by side | after View → Area → Vertical Split: Myrranox side camera left, DC right, both play together |
+  | `<id>` side view | look through that creature's side camera |
+  | Overview | whole habitat |
+  | Follow `<id>` | view stays centred on the creature, orbit/zoom freely with the mouse while it plays |
+  | Free view / Play / Frame | free navigation, playback |
+
+- **Rendering:** `render_camera.py` (background, resumable, one camera) + `make_side_by_side.py` → MP4.
+- Known issue: Myrranox textures point to `D:\FINAL MODUL\…` and are missing on this PC (renders pink).
 
 ## 5. Physics habitat world (step B, `sim/physics_world.py`)
 
@@ -192,9 +211,18 @@ Live during training: `tensorboard --logdir runs`, `python watch_locomotion.py -
 5. Test a reward before training on it: the first gait reward paid standing still 55–65 % (caught by a unit test).
 6. Mid-training setbacks recover (speed dip at 1.5M, a raised leg at 2.75M) – judge by the end, keep every checkpoint.
 7. Simulation details decide survival: a creature that can only turn while moving starved at the first rock.
+8. Check a reward with scripted policies before training – the plan's predator reward barely preferred hunting.
+9. A good reward still fails without early success: full action range, shaping that never pays for idling, and a
+   curriculum (prey that do not flee at first) made the predator brains learn.
+10. Rare behaviour (raids, defence) needs practice scenarios and the right inputs – and even then may not appear.
+11. 2D-trained decisions must match what the legs can do: the DC transferred to the physics body, the Myrranox did not
+    (no turning on the spot). Use the same energy model in training and playback.
+12. Training runs inside the Claude session – closing the app stops it; frequent checkpoints make restarts cheap.
 
-## 9. Next
+## 9. Next (open)
 
-- **D1** predator brains: round 1 against scripted rivals (running), then 3 alternating rounds against the other
-  species' frozen brain. **D2** fine-tuning with the real physics bodies. **E** section 12 checks.
-  **F** Blender recording of both species hunting, with hunger/fatigue display. Then the paper and presentation.
+- Myrranox: walking v3 with turning on the spot, or fine-tuning its predator brain with the physics body (plan D2);
+  fatigue balance (owner decision).
+- Raids and territory defence (not learned); alternating rounds against the other species' trained brain.
+- Final scene: 2 Myrranox + 2 DC; terrain/props; relink the Myrranox textures and re-render.
+- Paper and presentation (deadline and format still open).
