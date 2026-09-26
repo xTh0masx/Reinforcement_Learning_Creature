@@ -2,7 +2,8 @@
 
 All changes and owner decisions, newest first. Commit hashes refer to branch `rl-locomotion-setup`
 (tags: `legs-v1`, `legs-v2`). Details: [RESULTS.md](RESULTS.md), [locomotion_training_log.md](locomotion_training_log.md),
-[predator_training_log.md](predator_training_log.md), [experiments.csv](experiments.csv).
+[predator_training_log.md](predator_training_log.md), [experiments.csv](experiments.csv),
+time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
 ## 26 Sep 2026
 

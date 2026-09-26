@@ -145,7 +145,7 @@ Debug stand-ins (not RL): `record.py --policy heuristic` (scripted navigation, g
 | Showcase | `docs/videos/showcase_side_by_side.mp4` (5:00, both creatures side by side) |
 | Open | raids/defence, Myrranox turning on the spot, 2+2 creatures, textures, paper/slides |
 
-What happened and all results: **[docs/RESULTS.md](docs/RESULTS.md)** · changes: [docs/CHANGELOG.md](docs/CHANGELOG.md) ·
+What happened and all results: **[docs/RESULTS.md](docs/RESULTS.md)** · changes: [docs/CHANGELOG.md](docs/CHANGELOG.md) · time spent: [docs/TIME_LOG.md](docs/TIME_LOG.md) ·
 walking: [docs/locomotion_training_log.md](docs/locomotion_training_log.md) ·
 predators: [docs/predator_training_log.md](docs/predator_training_log.md).
 

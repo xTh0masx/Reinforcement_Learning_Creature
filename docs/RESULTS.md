@@ -2,7 +2,7 @@
 
 Status: 26 Sep 2026 · Project plan: [PROJECT_PLAN.md](../PROJECT_PLAN.md) · Walking training:
 [locomotion_training_log.md](locomotion_training_log.md) · Predator training:
-[predator_training_log.md](predator_training_log.md) · All changes: [CHANGELOG.md](CHANGELOG.md) ·
+[predator_training_log.md](predator_training_log.md) · All changes: [CHANGELOG.md](CHANGELOG.md) · Time spent: [TIME_LOG.md](TIME_LOG.md) ·
 Every training run: [experiments.csv](experiments.csv)
 
 Two predator species from a Blender scene – **Myrranox** (6-legged arthropod, 1.5 m long) and **DC_SKIN_RAW**
