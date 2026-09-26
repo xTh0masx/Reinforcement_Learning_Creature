@@ -31,7 +31,6 @@ ASSETS = {
     "dc":       {"object": "DC_SKIN_RAW",      "axis": 2, "size": 1.3},   # overall height, ~1.0 m shoulder
 }
 RIGS = {"myrranox": "Myrranox_rig", "dc": "DC_rig"}
-CAMERA_OFFSET = {"myrranox": (-4.0, 0.0, 1.8), "dc": (-5.0, 0.0, 2.2)}   # behind (-X) and above the root
 
 
 def _collection():
@@ -228,8 +227,12 @@ def _bar_mesh():
 
 def _hud(col, cam, cid, species_name, frames, tr):
     """Name + hunger/fatigue bars in front of the camera (top left of the image), keyed from the recording."""
-    d, w, h = 1.0, 0.30, 0.022               # distance in front of the camera, bar length, bar height (m)
-    x0, y0 = -0.62, 0.24
+    # Place it in the top-left corner of the image for this camera's lens (16:9 image, sensor width 36 mm)
+    d = 1.0                                              # distance in front of the camera (m)
+    half_w = 0.5 * cam.data.sensor_width / cam.data.lens * d
+    half_h = half_w * 9 / 16
+    w, h = 0.55 * half_w, 0.04 * half_h                  # bar length and height
+    x0, y0 = -0.95 * half_w, 0.62 * half_h
     white = _flat_material("RL_hud_text", (0.95, 0.95, 0.95, 1))
     grey = _flat_material("RL_hud_back", (0.15, 0.15, 0.15, 1))
 
@@ -242,19 +245,19 @@ def _hud(col, cam, cid, species_name, frames, tr):
 
     title = bpy.data.curves.new(f"HUD_{cid}_title", "FONT")
     title.body = f"{species_name}  ({cid})"
-    title.size = 0.035
-    t = child(bpy.data.objects.new(f"HUD_{cid}_title", title), (x0, y0 + 0.05))
+    title.size = 0.065 * half_h
+    t = child(bpy.data.objects.new(f"HUD_{cid}_title", title), (x0, y0 + 0.15 * half_h))
     t.data.materials.append(white)
     for i, (need, color) in enumerate(HUD_BARS):
-        y = y0 - i * 0.045
+        y = y0 - i * 0.14 * half_h
         label = bpy.data.curves.new(f"HUD_{cid}_{need}_label", "FONT")
         label.body = need
-        label.size = 0.022
+        label.size = 0.045 * half_h
         lo = child(bpy.data.objects.new(f"HUD_{cid}_{need}_label", label), (x0, y))
         lo.data.materials.append(white)
-        back = child(bpy.data.objects.new(f"HUD_{cid}_{need}_back", _bar_mesh().copy()), (x0 + 0.1, y, ), (w, h, 1))
+        back = child(bpy.data.objects.new(f"HUD_{cid}_{need}_back", _bar_mesh().copy()), (x0 + 0.3 * half_w, y), (w, h, 1))
         back.data.materials.append(grey)
-        bar = child(bpy.data.objects.new(f"HUD_{cid}_{need}", _bar_mesh().copy()), (x0 + 0.1, y), (w, h, 1))
+        bar = child(bpy.data.objects.new(f"HUD_{cid}_{need}", _bar_mesh().copy()), (x0 + 0.3 * half_w, y), (w, h, 1))
         bar.location.z = -d + 0.001
         bar.data.materials.append(_flat_material(f"RL_hud_{need}", color))
         if tr.get(need):
@@ -262,18 +265,78 @@ def _hud(col, cam, cid, species_name, frames, tr):
             _key(_fcurves(bar), "scale", 0, frames[:len(vals)], w * vals, 1)
 
 
-def _follow_camera(col, root, cid, species_name):
-    rig = _link(col, bpy.data.objects.new(f"CamRig_{cid}", None))
-    c = rig.constraints.new("COPY_LOCATION"); c.target = root
-    c = rig.constraints.new("COPY_ROTATION"); c.target = root
-    c.use_x = c.use_y = False
-    cam = _link(col, bpy.data.objects.new(f"Cam_{cid}", bpy.data.cameras.new(f"Cam_{cid}")))
-    cam.data.lens = 28
+# Side camera per species: distance to the side, height, lens (mm), body-centre height for the focus point
+SIDE_VIEW = {"myrranox": (3.2, 0.6, 35, 0.2), "dc": (5.5, 1.2, 35, 0.7)}
+POS_SMOOTH_S = 0.7          # camera position follows the creature with this delay
+HEADING_SMOOTH_S = 3.0      # camera direction follows the creature's heading only slowly -> steady side view
+
+
+def _smooth(values, tau_s, dt):
+    """Zero-phase exponential smoothing (forward + backward), no lag in the result."""
+    a = dt / (tau_s + dt)
+    v = np.asarray(values, dtype=float).copy()
+    for rng in (range(1, len(v)), range(len(v) - 2, -1, -1)):
+        prev = v[rng[0] - 1] if rng.step == 1 else v[rng[0] + 1]
+        for i in rng:
+            v[i] = prev = prev + a * (v[i] - prev)
+    return v
+
+
+def _side_camera(col, cid, species_name, frames, t, x, y, heading):
+    """Steady camera beside the creature (its left side), following position and heading smoothly.
+    Also a focus empty on the body for the "follow + free orbit" viewport mode."""
+    dist, height, lens, body_z = SIDE_VIEW.get(species_name, (5.0, 1.0, 35, 0.5))
+    dt = float(t[1] - t[0]) if len(t) > 1 else 0.1
+
+    focus = _link(col, bpy.data.objects.new(f"Focus_{cid}", None))
+    focus.empty_display_type = "SPHERE"
+    focus.empty_display_size = 0.1
+    focus["rl_view_distance"] = dist * 1.4
+    fx, fy = _smooth(x, 0.3, dt), _smooth(y, 0.3, dt)
+    fcs = _fcurves(focus)
+    _key(fcs, "location", 0, frames, fx)
+    _key(fcs, "location", 1, frames, fy)
+    _key(fcs, "location", 2, frames, np.full(len(t), body_z))
+
+    rig = _link(col, bpy.data.objects.new(f"SideRig_{cid}", None))
+    rig.rotation_mode = "XYZ"
+    fcs = _fcurves(rig)
+    _key(fcs, "location", 0, frames, _smooth(x, POS_SMOOTH_S, dt))
+    _key(fcs, "location", 1, frames, _smooth(y, POS_SMOOTH_S, dt))
+    _key(fcs, "location", 2, frames, np.zeros(len(t)))
+    _key(fcs, "rotation_euler", 2, frames, _smooth(np.unwrap(np.asarray(heading)), HEADING_SMOOTH_S, dt))
+
+    cam = _link(col, bpy.data.objects.new(f"SideCam_{cid}", bpy.data.cameras.new(f"SideCam_{cid}")))
+    cam.data.lens = lens
     cam.parent = rig
-    cam.location = CAMERA_OFFSET.get(species_name, (-5.0, 0.0, 2.0))
-    cam.rotation_euler = (math.radians(75), 0.0, math.radians(-90))  # look along +X, Z up; track fixes the rest
-    t = cam.constraints.new("DAMPED_TRACK"); t.target = root; t.track_axis = "TRACK_NEGATIVE_Z"
+    cam.location = (0.0, dist, height)                                   # on the creature's left side
+    cam.rotation_euler = (math.radians(90), 0.0, math.radians(180))      # looking along -Y, Z up
+    tr = cam.constraints.new("DAMPED_TRACK")
+    tr.target, tr.track_axis = focus, "TRACK_NEGATIVE_Z"
     return cam
+
+
+def _overview_camera(col, habitat_size=100.0):
+    cam = _link(col, bpy.data.objects.new("Overview_cam", bpy.data.cameras.new("Overview_cam")))
+    cam.data.lens = 28
+    cam.location = (0.0, -0.85 * habitat_size, 0.75 * habitat_size)
+    cam.rotation_euler = (Vector((0, 0, 0)) - cam.location).to_track_quat("-Z", "Y").to_euler()
+    return cam
+
+
+def _install_view_panel(csv_path):
+    """Store blender/scripts/view_panel.py in the .blend as a self-registering text block and register it now.
+    The script is found relative to the recording (<repo>/recordings/x.csv -> <repo>/blender/scripts)."""
+    src = os.path.join(os.path.dirname(os.path.dirname(csv_path)), "blender", "scripts", "view_panel.py")
+    if not os.path.exists(src):
+        print(f"view panel not installed: {src} not found")
+        return
+    code = open(src, encoding="utf-8").read()
+    text = bpy.data.texts.get("rl_view_panel.py") or bpy.data.texts.new("rl_view_panel.py")
+    text.clear()
+    text.write(code)
+    text.use_module = True                    # runs automatically when the .blend is opened (if scripts are allowed)
+    exec(compile(code, "rl_view_panel.py", "exec"), {"__name__": "__main__"})
 
 
 def import_csv(path):
@@ -337,18 +400,18 @@ def import_csv(path):
             model = _attach_asset(root, species[cid])
         if model is None:
             _placeholder(col, f"{cid}_body", ASSETS.get(species[cid], {}).get("size", 1.0)).parent = root
-        cameras.append(_follow_camera(col, root, cid, species[cid]))
+        cameras.append(_side_camera(col, cid, species[cid], frames, t, x, y, tr["heading"]))
         if tr.get("hunger"):
             _hud(col, cameras[-1], cid, species[cid], frames, tr)
 
     scene.frame_start, scene.frame_end = 1, last_frame
+    # No automatic camera switching: the viewer chooses (panel "Creatures" in the 3D view sidebar, N key).
     for m in [m for m in scene.timeline_markers if m.name.startswith("cam_")]:
         scene.timeline_markers.remove(m)
-    for i, cam in enumerate(cameras):
-        m = scene.timeline_markers.new(f"cam_{cam.name}", frame=1 + i * last_frame // len(cameras))
-        m.camera = cam
+    _overview_camera(col)
     if cameras:
         scene.camera = cameras[0]
+    _install_view_panel(path)
     scene.frame_set(1)
     return col
 
