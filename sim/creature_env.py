@@ -126,13 +126,15 @@ class CreatureEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
 
     def __init__(self, species="myrranox", render_mode=None, habitat_path=None, others=None, learned_limits=True,
-                 reward_version=2, obs_version=2, low_stock_prob=0.0):
+                 reward_version=2, obs_version=2, low_stock_prob=0.0, action_mapping="full", tired_from=TIRED_FROM):
         """others: list of {"species": "dc", "brain": None | "models/dc_brain_v1"} sharing the habitat;
         brain None = scripted policy (sim/scripted.py). learned_limits: movement limits of the trained
         locomotion brains (sim/locomotion_limits.json) instead of the ideal ones of sim/species.py.
         others may also set "intrude_prob" (scripted rival invades the ego's territory on that share of days).
         obs_version 2 adds the home prey stock and "rival at home" (29 values); 1 = original 27.
-        low_stock_prob: share of days that start with only 1-2 prey in the ego's territory (training scenarios)."""
+        low_stock_prob: share of days that start with only 1-2 prey in the ego's territory (training scenarios).
+        action_mapping / tired_from reproduce older training conditions for playback of old brains:
+        "legacy" = speed action < 0 means stop (brains before 25 Sep 23:00), tired_from=1.0 = slowed only at 100 %."""
         if species not in SPECIES:
             raise ValueError(f"Unknown species {species!r}, choose from {list(SPECIES)}")
         self.habitat = Habitat.load(habitat_path)
@@ -142,6 +144,8 @@ class CreatureEnv(gym.Env):
         self.energy = _load_energy()
         self.obs_version = obs_version
         self.low_stock_prob = low_stock_prob
+        self.action_mapping = action_mapping
+        self.tired_from = tired_from
         self.observation_space = spaces.Box(-1.0, 1.0, shape=(OBS_SIZE_V2 if obs_version >= 2 else OBS_SIZE,),
                                             dtype=np.float32)
         self.action_space = spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
@@ -209,9 +213,10 @@ class CreatureEnv(gym.Env):
         c = c or self.ego
         sp = c.species
         a = np.clip(np.asarray(action, dtype=float), -1.0, 1.0)
-        tired = float(np.clip((c.fatigue - TIRED_FROM) / (1.0 - TIRED_FROM), 0.0, 1.0))
+        tf = getattr(self, "tired_from", TIRED_FROM)
+        tired = float(c.fatigue >= 1.0) if tf >= 1.0 else float(np.clip((c.fatigue - tf) / (1.0 - tf), 0.0, 1.0))
         max_fwd = sp.max_speed * (1.0 - (1.0 - sp.tired_speed_cap) * tired)
-        if sp.max_backward_speed > 0:
+        if sp.max_backward_speed > 0 or getattr(self, "action_mapping", "full") == "legacy":
             target_v = a[0] * max_fwd if a[0] >= 0 else a[0] * sp.max_backward_speed
         else:
             target_v = (a[0] + 1.0) / 2.0 * max_fwd      # no backwards: the whole range -1..1 means 0..max speed
@@ -222,7 +227,8 @@ class CreatureEnv(gym.Env):
 
     def speed_action(self, c, frac):
         """Action value for a forward speed of `frac` x max speed (inverse of the mapping in command())."""
-        return float(frac) if c.species.max_backward_speed > 0 else 2.0 * float(frac) - 1.0
+        legacy = getattr(self, "action_mapping", "full") == "legacy"
+        return float(frac) if c.species.max_backward_speed > 0 or legacy else 2.0 * float(frac) - 1.0
 
     def set_difficulty(self, x):
         self.difficulty = float(np.clip(x, 0.0, 1.0))

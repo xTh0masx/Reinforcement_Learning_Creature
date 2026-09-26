@@ -6,6 +6,18 @@ Training: `train.py` (PPO, 8 parallel habitats, 3-frame stack, VecNormalize). Ev
 (section 12 checks, 5 fixed 10-minute days, scripted baseline). Live view: `watch_predator.py`, TensorBoard `habitat/*`.
 Every run is also a row in [experiments.csv](experiments.csv); evaluations are in [evaluations/](evaluations/).
 
+**Training videos** – `docs/videos/predator/<run>_training.mp4` (`make_predator_video.py`): every checkpoint
+(untrained, then every 500k steps) lives one 10-minute day in the habitat, top-down at 30× speed, next to the learning
+curve (prey / 10 min) and live hunger, fatigue, prey, raids. Each run is replayed under its own training conditions
+(old speed mapping and fatigue rule for attempts 1–2, prey fleeing at 0.7 m/s).
+
+| Run | Video | What it shows (one day per checkpoint) |
+| --- | --- | --- |
+| attempt 1 | `myr_brain_v1_r1_training.mp4`, `dc_brain_v1_r1_training.mp4` | starves every day, 0 prey at every checkpoint |
+| attempt 2 | `myr_brain_v2_r1_training.mp4`, `dc_brain_v2_r1_training.mp4` | the same – stands still and starves |
+| round 1 | `myr_brain_v3_r1_training.mp4`, `dc_brain_v3_r1_training.mp4` | Myrranox: 0 → 2 → 4 prey, survives the day at 2.0–2.5M; DC: survives every day from 0.5M (4–6 prey) |
+| option B | `myr_brain_v4_r1_training.mp4`, `dc_brain_v4_r1_training.mp4` | Myrranox: 1 → 3 prey, survives at 1.5–2.5M; DC (released): survives most days, 4–5 prey |
+
 ## Setup that stayed the same
 
 - Habitat, needs and territory rules: PROJECT_PLAN.md sections 6, 8 and 15 (own-territory prey do not come back,

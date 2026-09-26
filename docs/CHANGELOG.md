@@ -7,6 +7,9 @@ time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
 ## 26 Sep 2026
 
+**Predator training videos** – `make_predator_video.py`, `docs/videos/predator/` (all 8 runs); `CreatureEnv` switches
+`action_mapping="legacy"` and `tired_from` replay old brains under their training conditions.
+
 **Showcase video** (`d3e40c5`)
 - `docs/videos/showcase_side_by_side.mp4`: 5:00, Myrranox left / DC right, steady side cameras with hunger/fatigue.
 - `blender/scripts/render_camera.py` (resumable background render per camera, 16 EEVEE samples, 960×540),
