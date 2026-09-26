@@ -1,0 +1,9 @@
+dc - dc_brain_v4_r1 vs myrranox (scripted), 5 days of 10 min:
+  survived 600 s on average, starved in 0/5 days
+  [PASS] time inside own zone                                 93 %   (target >= 90 %)
+  [PASS] time with hunger at 100 %                             3 %   (target <= 5 %)
+  [PASS] prey caught per 10 min                               4.60   (target >= 3)
+  [PASS] rest-spot visits when fatigue > 50 % per 10 min      2.60   (target >= 1)
+  [fail] obstacle/boundary hits per 10 min                    1.40   (target <= 1)
+  also: raids 0.00 / 10 min, time in rival zone 2 %, intruders repelled 0.00 / 10 min
+  4/5 checks passed

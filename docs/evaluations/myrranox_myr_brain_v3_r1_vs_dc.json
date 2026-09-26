@@ -5,15 +5,15 @@
   "rival_brain": null,
   "seeds": 5,
   "mean": {
-    "survived_s": 506.56000000000006,
-    "starved": 0.8,
-    "home": 0.9899699925551151,
-    "starving": 0.10254463950632875,
-    "prey": 4.2014543416129015,
+    "survived_s": 516.88,
+    "starved": 0.6,
+    "home": 0.9876039800000719,
+    "starving": 0.07886643583790014,
+    "prey": 4.41771526598963,
     "raids": 0.0,
     "rest_visits": 0.0,
-    "hits": 0.2347417840375587,
-    "rival_zone": 0.0,
+    "hits": 0.9719733079122974,
+    "rival_zone": 0.0008658008658008658,
     "intruders_repelled": 0.0
   },
   "checks_passed": 3

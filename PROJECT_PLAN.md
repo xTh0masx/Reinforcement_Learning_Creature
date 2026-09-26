@@ -320,8 +320,12 @@ tooling for the walking training.
 Next:
 1. ✔ Locomotion v1 and v2 trained, released, documented (`docs/RESULTS.md`, `docs/locomotion_training_log.md`).
 2. ✔ B physics habitat world, ✔ C predator rules (section 15).
-3. D1 predator brains: round 1 vs scripted rivals (`*_brain_v1_r1`, running 25 Sep), then 3 alternating rounds
-   against the other species' frozen brain; D2 physics fine-tuning; E section 12 checks; F Blender recording.
+3. D1 predator brains (26 Sep): after two failed attempts (plan reward; exploration) and round 1 (`*_brain_v3_r1`,
+   hunts but no raids/rest/defence), option B (`*_brain_v4_r1`: home-stock + intruder inputs, lean days, invading
+   scripted rival, fatigue slows from 70 %). **DC predator brain released: `models/dc_brain_v4_r1`** (4/5 section 12
+   checks, survives every day). Myrranox: best so far is `myr_brain_v3_r1` (3/5 checks); v4 was worse.
+   Open (owner decision): Myrranox fatigue balance; raids and territory defence not learned yet by any brain.
+   Evaluations: `docs/evaluations/`. Then: alternating rounds, D2 physics fine-tuning, F Blender recording.
 3. Train the navigation brains (`train.py`, stage 1) for both species; check against section 12.
 4. `record_physics.py` with trained navigation + locomotion brains → import into Blender → render demo.
 5. Missing Myrranox textures (`D:\FINAL MODUL\WORKFILES\SubstancePainter\T_*_BC.png`) must be relinked.
