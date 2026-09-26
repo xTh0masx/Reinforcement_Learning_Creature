@@ -7,6 +7,16 @@ time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
 ## 26 Sep 2026
 
+**"Alive" bodies, stage 1: passive body parts** (owner request: whole body should move, ant / panther-like)
+- `sim/bodies.py` `PassiveChain`: spring-damper joints (no motor, not brain-controlled). Myrranox: abdomen
+  (petiole: up/down + sideways) and head. DC: tail in 2 segments, neck + head, both extra arms – on the existing
+  DC_rig bones, so the proxy mesh follows without new weights. Spring rest angles cancel the sag under gravity
+  (`calibrate_springref`, < 0.2°). Optional (`passive=True`), so training setups stay reproducible.
+- v2 walking brains run unchanged with the moving parts: no falls, same speed/turning. Swing in the walk test:
+  DC tail tip up to 34–46°, Myrranox abdomen up to 17–20°, DC neck ≈ 1° (head stays steady).
+- Recording stores the passive joint angles; rigs: new Myrranox bones `abdomen`, `head` (abdomen, fins, head, eyes,
+  mandibles re-parented); DC bones get their joints (`rig_common.add_passive_bones`). Showcase re-recorded.
+
 **Predator training videos** – `make_predator_video.py`, `docs/videos/predator/` (all 8 runs); `CreatureEnv` switches
 `action_mapping="legacy"` and `tired_from` replay old brains under their training conditions.
 

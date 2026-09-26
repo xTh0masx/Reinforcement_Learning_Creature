@@ -96,3 +96,36 @@ def attach_to_bone(obj, arm, bone):
     obj.parent_type = "BONE"
     obj.parent_bone = bone
     obj.matrix_world = mw
+
+
+def add_passive_bones(arm, spec, parts=None):
+    """Stage 1 "alive" bodies: make sure every passive physics segment (sim/bodies.py PassiveChain) has a bone on its
+    joint points, store its spring joints as rl_joints (played back like the leg joints) and parent the given mesh
+    parts to it. parts: {bone name: [mesh object names]}. Existing bones (DC tail/neck/head/arms) are reused."""
+    missing = [(ch, i) for ch in spec.passive for i in range(len(ch.joints)) if ch.bones[i] not in arm.data.bones]
+    if missing:
+        for o in bpy.context.selected_objects:
+            o.select_set(False)
+        bpy.context.view_layer.objects.active = arm
+        arm.select_set(True)
+        bpy.ops.object.mode_set(mode="EDIT")
+        eb = arm.data.edit_bones
+        for ch, i in missing:
+            b = eb.new(ch.bones[i])
+            b.head, b.tail = Vector(ch.points[i]), Vector(ch.points[i + 1])
+            b.parent = eb[ch.bones[i - 1]] if i else eb["torso"]
+        bpy.ops.object.mode_set(mode="OBJECT")
+        for pb in arm.pose.bones:
+            pb.rotation_mode = "QUATERNION"
+    for ch in spec.passive:
+        names = ch.joint_names()
+        k = 0
+        for i, seg in enumerate(ch.joints):
+            arm.data.bones[ch.bones[i]]["rl_joints"] = json.dumps(
+                [[names[k + j], *map(float, axis)] for j, (axis, _, _) in enumerate(seg)])
+            k += len(seg)
+    for bone, objs in (parts or {}).items():
+        for n in objs:
+            if n in bpy.data.objects:
+                attach_to_bone(bpy.data.objects[n], arm, bone)
+    return arm

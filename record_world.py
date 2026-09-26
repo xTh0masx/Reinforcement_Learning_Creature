@@ -46,6 +46,7 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--pick-seed", type=int, default=0, help="try this many seeds in 2D first, keep the best")
     p.add_argument("--out", default="recordings/showcase.csv")
+    p.add_argument("--rigid", action="store_true", help="bodies without the spring tail/abdomen/head/arms (stage 1)")
     args = p.parse_args()
     steps = int(args.minutes * 600)
     ego, other = "myrranox", "dc"
@@ -59,7 +60,8 @@ def main():
     env, ego_brain, obs = make_env(ego, other, seed)
     creatures = env.creatures
     world = PhysicsWorld([{"id": c.id, "species": c.species.name, "loco": WALKERS[c.species.name],
-                           "pos": tuple(c.pos), "yaw": c.heading} for c in creatures], Habitat.load(), seed=seed)
+                           "pos": tuple(c.pos), "yaw": c.heading} for c in creatures], Habitat.load(), seed=seed,
+                         passive=not args.rigid)
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -69,12 +71,13 @@ def main():
         f = open(out.with_name(f"{out.stem}_{c.id}_pose.csv"), "w", newline="")
         w = csv.writer(f)
         w.writerow(["time", "x", "y", "z", "qw", "qx", "qy", "qz"] + body.body.joint_names +
-                   [f"{n}_{a}" for n in body.body.foot_names for a in "xyz"])
+                   body.body.passive_joint_names + [f"{n}_{a}" for n in body.body.foot_names for a in "xyz"])
         pose_files[c.id], pose_writers[c.id] = f, w
 
     def write_pose(cid, t, pz):
         pose_writers[cid].writerow([f"{t:.3f}", *(f"{v:.5f}" for v in pz["pos"]), *(f"{v:.6f}" for v in pz["quat"]),
-                                    *(f"{v:.5f}" for v in pz["joints"]), *(f"{v:.5f}" for v in pz["feet"].ravel())])
+                                    *(f"{v:.5f}" for v in pz["joints"]), *(f"{v:.5f}" for v in pz.get("passive", [])),
+                                    *(f"{v:.5f}" for v in pz["feet"].ravel())])
 
     with open(out, "w", newline="") as f:
         w = csv.writer(f)

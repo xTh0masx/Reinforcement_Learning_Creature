@@ -26,6 +26,24 @@ class Leg:
 
 
 @dataclass
+class PassiveChain:
+    """Body parts moved only by physics (spring-damper joints, no motor, not controlled by a brain):
+    tail, abdomen, neck/head, extra arms. points: joint positions of each segment + the chain's end point (body frame).
+    joints[i]: list of (axis, stiffness Nm/rad, springref deg) of segment i; bones[i]: Blender bone of segment i."""
+    name: str
+    points: list
+    joints: list
+    masses: list
+    radius: list
+    bones: list
+    damping_ratio: float = 0.35
+    range_deg: float = 45.0
+
+    def joint_names(self):
+        return [f"{self.name}_p{i}{'xyz'[k]}" for i, seg in enumerate(self.joints) for k in range(len(seg))]
+
+
+@dataclass
 class BodySpec:
     name: str
     mass: float                 # kg, total
@@ -36,6 +54,7 @@ class BodySpec:
     joint_damping: float = 0.5
     action_scale: float = 0.6   # rad, action +-1 -> +-this around the rest pose
     stand_height: float = 0.0   # torso origin height when standing in the rest pose
+    passive: list = field(default_factory=list)     # PassiveChain parts (stage 1 "alive" bodies)
 
     @property
     def joint_names(self):
@@ -44,6 +63,10 @@ class BodySpec:
     @property
     def foot_names(self):
         return [f"{leg.name}_foot" for leg in self.legs]
+
+    @property
+    def passive_joint_names(self):
+        return [n for ch in self.passive for n in ch.joint_names()]
 
 
 def _mirror(p):
@@ -69,7 +92,11 @@ _MYR_LEFT = {
 }
 
 
-def myrranox():
+PITCH, YAW = np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
+
+
+def myrranox(passive=False):
+    """passive=True: abdomen and head hang on spring-damper joints and swing with the gait (stage 1)."""
     legs = []
     for pair, pts in _MYR_LEFT.items():
         for side, sgn in (("L", 1), ("R", -1)):
@@ -79,12 +106,27 @@ def myrranox():
                                                   (1, lift, (-40, 60)), (2, lift, (-50, 50))], 0.018))
     torso = [
         '<geom name="thorax" type="capsule" fromto="0.06 0 0.19 0.62 0 0.19" size="0.1" mass="3.5"/>',
-        '<geom name="head" type="ellipsoid" pos="0.60 0 0.15" size="0.1 0.08 0.06" mass="0.8"/>',
-        '<geom name="mandibles" type="box" pos="0.70 0 0.095" size="0.05 0.08 0.02" mass="0.2"/>',
-        '<geom name="abdomen" type="ellipsoid" pos="-0.27 0 0.18" size="0.40 0.16 0.11" mass="1.2"/>',
     ]
+    chains = []
+    if passive:
+        chains = [
+            # petiole joint measured between Abdomen_low and the torso; the abdomen bobs and sways behind the body
+            PassiveChain("abdomen", [(0.068, 0, 0.174), (-0.66, 0, 0.17)],
+                         [[(PITCH, 16.0, MYR_SPRINGREF["abdomen_p0x"]), (YAW, 8.0, 0.0)]],
+                         masses=[1.2], radius=[0.09], bones=["abdomen"], damping_ratio=0.2),
+            # head + mandibles on the neck joint between Head_low and the torso
+            PassiveChain("head", [(0.507, 0, 0.165), (0.75, 0, 0.13)],
+                         [[(PITCH, 12.0, MYR_SPRINGREF["head_p0x"]), (YAW, 6.0, 0.0)]],
+                         masses=[1.0], radius=[0.05], bones=["head"], damping_ratio=0.25),
+        ]
+    else:
+        torso += [
+            '<geom name="head" type="ellipsoid" pos="0.60 0 0.15" size="0.1 0.08 0.06" mass="0.8"/>',
+            '<geom name="mandibles" type="box" pos="0.70 0 0.095" size="0.05 0.08 0.02" mass="0.2"/>',
+            '<geom name="abdomen" type="ellipsoid" pos="-0.27 0 0.18" size="0.40 0.16 0.11" mass="1.2"/>',
+        ]
     return BodySpec("myrranox", mass=8.0, torso_geoms=torso, legs=legs,
-                    kp=60.0, max_torque=20.0, joint_damping=0.5, action_scale=0.6, stand_height=0.0)
+                    kp=60.0, max_torque=20.0, joint_damping=0.5, action_scale=0.6, stand_height=0.0, passive=chains)
 
 
 # ------------------------------------------------------------------------------------------------
@@ -97,7 +139,9 @@ _DC_LEFT = {
 }
 
 
-def dc():
+def dc(passive=False):
+    """passive=True: tail (2 segments), neck + head and the two extra arms on spring-damper joints (stage 1).
+    The chain points are the DC_rig bones tail_1/2, neck, head, arm_L/R, so the proxy mesh follows directly."""
     legs = []
     for pair, pts in _DC_LEFT.items():
         for side, sgn in (("L", 1), ("R", -1)):
@@ -108,20 +152,85 @@ def dc():
                                                   (1, pitch, (-70, 70)), (2, pitch, (-60, 60))], 0.045))
     torso = [
         '<geom name="chest" type="capsule" fromto="-0.25 0 0.66 0.50 0 0.74" size="0.21" mass="35"/>',
-        '<geom name="arms" type="capsule" fromto="0.76 0 0.44 0.98 0 0.24" size="0.07" mass="2"/>',
-        '<geom name="neck" type="capsule" fromto="0.65 0 0.85 1.00 0 0.92" size="0.10" mass="5"/>',
-        '<geom name="head" type="ellipsoid" pos="1.15 0 0.82" size="0.16 0.09 0.12" mass="4"/>',
-        '<geom name="tail" type="capsule" fromto="-0.45 0 0.55 -1.30 0 0.44" size="0.06" mass="4"/>',
     ]
+    chains = []
+    if passive:
+        chains = [
+            PassiveChain("tail", [(-0.30, 0, 0.60), (-0.80, 0, 0.50), (-1.35, 0, 0.42)],
+                         [[(PITCH, 60.0, DC_SPRINGREF["tail_p0x"]), (YAW, 25.0, 0.0)],
+                          [(PITCH, 18.0, DC_SPRINGREF["tail_p1x"]), (YAW, 6.0, 0.0)]],
+                         masses=[2.5, 1.5], radius=[0.07, 0.05], bones=["tail_1", "tail_2"], damping_ratio=0.15),
+            PassiveChain("neck", [(0.50, 0, 0.80), (1.00, 0, 0.90), (1.32, 0, 0.80)],
+                         [[(PITCH, 400.0, DC_SPRINGREF["neck_p0x"]), (YAW, 250.0, 0.0)],
+                          [(PITCH, 60.0, DC_SPRINGREF["neck_p1x"])]],
+                         masses=[5.0, 4.0], radius=[0.10, 0.12], bones=["neck", "head"]),
+        ]
+        for side, sgn in (("L", 1), ("R", -1)):
+            chains.append(PassiveChain(f"arm_{side}", [(0.62, 0.20 * sgn, 0.62), (0.98, 0.22 * sgn, 0.24)],
+                                       [[(PITCH, 10.0, DC_SPRINGREF["arm_L_p0x"]), (np.array([1.0, 0, 0]) * sgn, 6.0, 0.0)]],
+                                       masses=[1.0], radius=[0.05], bones=[f"arm_{side}"], damping_ratio=0.25))
+    else:
+        torso += [
+            '<geom name="arms" type="capsule" fromto="0.76 0 0.44 0.98 0 0.24" size="0.07" mass="2"/>',
+            '<geom name="neck" type="capsule" fromto="0.65 0 0.85 1.00 0 0.92" size="0.10" mass="5"/>',
+            '<geom name="head" type="ellipsoid" pos="1.15 0 0.82" size="0.16 0.09 0.12" mass="4"/>',
+            '<geom name="tail" type="capsule" fromto="-0.45 0 0.55 -1.30 0 0.44" size="0.06" mass="4"/>',
+        ]
     return BodySpec("dc", mass=60.0, torso_geoms=torso, legs=legs,
-                    kp=300.0, max_torque=150.0, joint_damping=3.0, action_scale=0.6, stand_height=0.0)
+                    kp=300.0, max_torque=150.0, joint_damping=3.0, action_scale=0.6, stand_height=0.0, passive=chains)
 
+
+# Spring rest angles (deg) that cancel the sag under gravity, so the parts rest in the modelled pose.
+# Found with calibrate_springref() (python -m sim.bodies --springref).
+MYR_SPRINGREF = {"abdomen_p0x": 15.34, "head_p0x": -5.68}
+DC_SPRINGREF = {"tail_p0x": 16.85, "tail_p1x": 12.91, "neck_p0x": -5.5, "neck_p1x": -5.85, "arm_L_p0x": -9.19}
 
 BODIES = {"myrranox": myrranox, "dc": dc}
 
 
 def _fmt(v):
     return " ".join(f"{x:.4f}" for x in v)
+
+
+def _passive_xml(ch):
+    """Nested bodies with spring-damper joints (no actuators). Damping from the damping ratio and a rough inertia."""
+    xml, closes = "", ""
+    pts = [np.asarray(p, dtype=float) for p in ch.points]
+    for i, seg in enumerate(ch.joints):
+        origin = pts[i] - (pts[i - 1] if i else 0)
+        vec = pts[i + 1] - pts[i]
+        length = float(np.linalg.norm(vec))
+        mass_out = sum(ch.masses[i:])                       # this joint carries all segments beyond it
+        inertia = mass_out * (0.5 * length) ** 2 + ch.masses[i] * length ** 2 / 12
+        joints = ""
+        for k, (axis, stiff, ref) in enumerate(seg):
+            damp = 2 * ch.damping_ratio * np.sqrt(stiff * inertia)
+            joints += (f'<joint name="{ch.name}_p{i}{"xyz"[k]}" axis="{_fmt(axis)}" stiffness="{stiff}" '
+                       f'springref="{ref}" damping="{damp:.4f}" armature="0.005" limited="true" '
+                       f'range="{-ch.range_deg} {ch.range_deg}"/>')
+        xml += (f'<body name="{ch.name}_s{i}" pos="{_fmt(origin)}">{joints}'
+                f'<geom type="capsule" fromto="0 0 0 {_fmt(vec)}" size="{ch.radius[i]}" mass="{ch.masses[i]}" '
+                f'class="creature"/>')
+        closes += "</body>"
+    return xml + closes
+
+
+def calibrate_springref(species):
+    """Settle the body with the rest pose held and read how far each passive joint sags; springref = -sag."""
+    import mujoco
+    spec = BODIES[species](passive=True)
+    m = mujoco.MjModel.from_xml_string(build_mjcf(spec))
+    d = mujoco.MjData(m)
+    for _ in range(1500):
+        mujoco.mj_step(m, d)
+    out = {}
+    for ch in spec.passive:
+        for i, seg in enumerate(ch.joints):
+            if abs(seg[0][0][1]) > 0.5:                     # first joint of each segment is the pitch joint
+                name = f"{ch.name}_p{i}x"
+                q = d.qpos[m.jnt_qposadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, name)]]
+                out[name] = round(-float(np.degrees(q)), 2)
+    return out
 
 
 def _prefix_names(xml, prefix):
@@ -161,6 +270,7 @@ def creature_xml(spec: BodySpec, prefix="", pos=(0.0, 0.0), yaw=0.0, leg_mass_fr
         legs_xml.append(xml + closes)
 
     torso = [g.replace("<geom ", '<geom class="creature" ') for g in spec.torso_geoms]
+    torso += [_passive_xml(ch) for ch in spec.passive]
     quat = f"{np.cos(yaw / 2):.6f} 0 0 {np.sin(yaw / 2):.6f}"
     body = (f'<body name="torso" pos="{pos[0]:.4f} {pos[1]:.4f} {start_height(spec):.4f}" quat="{quat}">'
             f'<freejoint name="root"/><site name="torso_site" pos="0 0 0" size="0.01"/>'

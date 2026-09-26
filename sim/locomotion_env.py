@@ -50,10 +50,10 @@ class LocomotionEnv(gym.Env):
 
     def __init__(self, species="myrranox", episode_seconds=20.0, command_seconds=(2.0, 5.0),
                  stand_prob=0.15, render_mode=None, width=640, height=400, version=1,
-                 model=None, data=None, prefix=""):
+                 model=None, data=None, prefix="", passive=False):
         self.species_name = species
         self.species = SPECIES[species]
-        self.body = BODIES[species]()
+        self.body = BODIES[species](passive=passive)       # passive=True: tail/abdomen/head/arms on springs
         self.version = version
         self.w = WEIGHTS[version]
         self.shared = model is not None
@@ -89,6 +89,8 @@ class LocomotionEnv(gym.Env):
         self.floor_geom = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "floor")
         self.torso_body = nid(mujoco.mjtObj.mjOBJ_BODY, "torso")
         self.torso_geoms = set(np.flatnonzero(m.geom_bodyid == self.torso_body).tolist())
+        self.passive_qpos = np.array([m.jnt_qposadr[nid(mujoco.mjtObj.mjOBJ_JOINT, n)]
+                                      for n in self.body.passive_joint_names], dtype=int)
 
         mujoco.mj_forward(m, self.data)
         self.stand_z = float(self.data.qpos[self.q0 + 2])
@@ -341,6 +343,7 @@ class LocomotionEnv(gym.Env):
         mujoco.mj_kinematics(self.model, d)   # site positions after mj_step are one substep old
         q0 = self.q0
         return {"pos": d.qpos[q0:q0 + 3].copy(), "quat": d.qpos[q0 + 3:q0 + 7].copy(),
+                "passive": d.qpos[self.passive_qpos].copy(),
                 "joints": d.qpos[self.joint_qpos].copy(), "feet": d.site_xpos[self.foot_sites].copy()}
 
     def render(self):

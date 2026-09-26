@@ -177,6 +177,22 @@ with its real legs and survives the whole recording (1 prey), the DC catches 3. 
 creature, overview camera, panel "Creatures" (side views, follow + free orbit, both side by side after splitting the
 3D view). Preview: `figures/showcase_side_by_side.png`.
 
+## 6d. "Alive" bodies – stage 1: passive body parts (26 Sep)
+
+Owner request: not only the legs – the whole body should move (Myrranox like an ant, DC like a panther with extra
+arms). Stage 1 adds body parts that move only by physics: spring-damper joints without motors.
+
+| Creature | Passive parts (joints) | Swing while walking (v2 brain) |
+| --- | --- | --- |
+| Myrranox | abdomen (up/down, sideways), head (up/down, sideways) | abdomen up to 17–20° sideways, head up to 9° |
+| DC | tail 2 segments (up/down, sideways each), neck (2) + head (1), both extra arms (2 each) | tail tip up to 34–46° in turns, arms up to 10°, neck ≈ 1° (steady head) |
+
+Spring rest angles compensate gravity (parts rest in the modelled pose); the collision shapes of the low Myrranox
+abdomen and head were slimmed so they do not rest on the ground. The v2 walking brains need no retraining (no falls,
+unchanged speed and turning). Recording and Blender rigs include the new joints. Preview:
+`videos/alive_stage1_preview.mp4`. Next: stage 2 (actively controlled spine/neck/head, RL) and stage 3 (gaze, eating,
+idle motion).
+
 ## 7. Videos and graphs
 
 | File | What it shows |

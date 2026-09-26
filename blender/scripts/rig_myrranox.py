@@ -15,6 +15,11 @@ import bpy
 ASSET = "Myrranox_low_2_0"
 RIG = "Myrranox_rig"
 # mesh part per leg segment (coxa, femur, claw) for each leg pair in sim/bodies.py
+# mesh parts that ride on the passive (spring) bones of stage 1
+PASSIVE_PARTS = {
+    "abdomen": ["Abdomen_low", "Fins_01_low", "Fins_02_low"],
+    "head": ["Head_low", "Eyes_low", "Mandibles_low", "MandiblesStart_low", "MandiblesCon_low", "InnerMandible_low"],
+}
 LEG_PARTS = {
     "front": ("TopArms_low", "longTopArms_low", "topclaw_low"),
     "mid": ("MidArms_low", "longmidarms_low", "midclaw_low"),
@@ -26,14 +31,16 @@ def rig(repo_root):
     for p in (repo_root, f"{repo_root}/blender/scripts"):
         if p not in sys.path:
             sys.path.insert(0, p)
-    from rig_common import attach_to_bone, body_frame_matrix, build_armature, split_left_right, store_joint_metadata
+    from rig_common import (add_passive_bones, attach_to_bone, body_frame_matrix, build_armature, split_left_right,
+                            store_joint_metadata)
     from sim.bodies import myrranox
-    spec = myrranox()
+    spec = myrranox(passive=True)
 
     existing = bpy.data.objects.get(RIG)
     if existing is not None:
-        # Already rigged: rebuilding would orphan the parts, so only refresh the joint data.
+        # Already rigged: rebuilding would orphan the parts, so only refresh the joint data (+ passive bones).
         store_joint_metadata(existing, spec)
+        add_passive_bones(existing, spec, PASSIVE_PARTS)
         return existing
 
     asset = bpy.data.objects[ASSET]
@@ -59,5 +66,6 @@ def rig(repo_root):
     for k in list(asset.children_recursive):
         if k.type == "MESH" and k.name not in leg_objs:
             attach_to_bone(k, arm, "torso")
+    add_passive_bones(arm, spec, PASSIVE_PARTS)
     bpy.context.view_layer.update()
     return arm

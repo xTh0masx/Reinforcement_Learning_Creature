@@ -323,6 +323,12 @@ Done:
   "Creatures", hunger/fatigue display) → `docs/videos/showcase_side_by_side.mp4` (5:00).
 - Prey at half speed (owner decision 26 Sep).
 
+"Alive" bodies (owner request 26 Sep – whole body moves, ant / panther-like), 3 stages:
+- ✔ Stage 1: passive spring-damper parts (Myrranox abdomen + head; DC tail, neck/head, extra arms), played back on
+  the rigs; v2 walking brains unaffected.
+- Stage 2: actively controlled spine / neck / head (walking v3, RL with head-steadiness and energy rewards).
+- Stage 3: gaze to prey/rival from the predator brain, mandibles/arms when catching, idle breathing/looking.
+
 Next / open:
 1. Myrranox: turning on the spot (walking v3) or D2 fine-tuning with the physics body; fatigue balance (owner decision).
 2. Raids and territory defence (not learned); alternating rounds against the other species' trained brain (stage 4).
