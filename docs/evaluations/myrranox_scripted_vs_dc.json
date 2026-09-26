@@ -1,0 +1,20 @@
+{
+  "species": "myrranox",
+  "brain": "scripted",
+  "rival": "dc",
+  "rival_brain": null,
+  "seeds": 5,
+  "mean": {
+    "survived_s": 554.22,
+    "starved": 0.8,
+    "home": 0.8782262391229464,
+    "starving": 0.1136628275456916,
+    "prey": 3.468857184368389,
+    "raids": 0.20225855385133995,
+    "rest_visits": 3.7309429047302602,
+    "hits": 0.4174306939662983,
+    "rival_zone": 0.10936122837556261,
+    "intruders_repelled": 0.24691358024691357
+  },
+  "checks_passed": 3
+}

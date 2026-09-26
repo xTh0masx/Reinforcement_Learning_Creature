@@ -54,7 +54,10 @@ R_FIGHT_RISK = -0.1         # per step closer than 2 m to a rival
 CONFRONT_RANGE = 8.0
 FIGHT_RANGE = 2.0
 
-OBS_SIZE = 27
+OBS_SIZE = 27               # observation version 1 (stage 1 layout)
+RAYS = slice(19, 27)        # position of the 8 obstacle rays in every observation version
+OBS_SIZE_V2 = 29            # + prey left in the own territory (fraction) + a rival is inside the own territory (1/0)
+TIRED_FROM = 0.7            # fatigue above which top speed falls gradually to tired_speed_cap at 100 %
 NEUTRAL = "neutral"
 ENERGY_FILE = os.path.join(os.path.dirname(__file__), "energy.json")
 LIMITS_FILE = os.path.join(os.path.dirname(__file__), "locomotion_limits.json")
@@ -123,10 +126,13 @@ class CreatureEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
 
     def __init__(self, species="myrranox", render_mode=None, habitat_path=None, others=None, learned_limits=True,
-                 reward_version=2):
+                 reward_version=2, obs_version=2, low_stock_prob=0.0):
         """others: list of {"species": "dc", "brain": None | "models/dc_brain_v1"} sharing the habitat;
         brain None = scripted policy (sim/scripted.py). learned_limits: movement limits of the trained
-        locomotion brains (sim/locomotion_limits.json) instead of the ideal ones of sim/species.py."""
+        locomotion brains (sim/locomotion_limits.json) instead of the ideal ones of sim/species.py.
+        others may also set "intrude_prob" (scripted rival invades the ego's territory on that share of days).
+        obs_version 2 adds the home prey stock and "rival at home" (29 values); 1 = original 27.
+        low_stock_prob: share of days that start with only 1-2 prey in the ego's territory (training scenarios)."""
         if species not in SPECIES:
             raise ValueError(f"Unknown species {species!r}, choose from {list(SPECIES)}")
         self.habitat = Habitat.load(habitat_path)
@@ -134,7 +140,10 @@ class CreatureEnv(gym.Env):
         self.reward_version = reward_version
         self.difficulty = 1.0       # prey escape ability 0..1, ramped up during training (train.py)
         self.energy = _load_energy()
-        self.observation_space = spaces.Box(-1.0, 1.0, shape=(OBS_SIZE,), dtype=np.float32)
+        self.obs_version = obs_version
+        self.low_stock_prob = low_stock_prob
+        self.observation_space = spaces.Box(-1.0, 1.0, shape=(OBS_SIZE_V2 if obs_version >= 2 else OBS_SIZE,),
+                                            dtype=np.float32)
         self.action_space = spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
         self._ray_offsets = np.arange(N_RAYS) * (2 * math.pi / N_RAYS)
         self._viewer = None
@@ -146,6 +155,7 @@ class CreatureEnv(gym.Env):
             return Creature(sp, f"{sp}_{counts[sp] - 1}", self.habitat, learned_limits)
 
         self.ego = new(species)
+        self.ego.obs_version = obs_version
         self.others_cfg = list(others or [])
         self.others = [new(o["species"]) for o in self.others_cfg]
         self.creatures = [self.ego] + self.others
@@ -173,9 +183,11 @@ class CreatureEnv(gym.Env):
             if cfg.get("brain"):
                 from sim.nav_brain import NavBrain
                 c.policy = NavBrain(cfg["brain"])
+                # a brain trained on the 27-value layout gets that layout (3 stacked frames)
+                c.obs_version = 1 if c.policy.model.observation_space.shape[0] == 3 * OBS_SIZE else 2
             else:
                 from sim.scripted import ScriptedPredator
-                c.policy = ScriptedPredator()
+                c.policy = ScriptedPredator(intrude_prob=cfg.get("intrude_prob", 0.0))
         return c.policy
 
     # ------------------------------------------------------------------------------------------
@@ -197,7 +209,8 @@ class CreatureEnv(gym.Env):
         c = c or self.ego
         sp = c.species
         a = np.clip(np.asarray(action, dtype=float), -1.0, 1.0)
-        max_fwd = sp.max_speed * (sp.tired_speed_cap if c.fatigue >= 1.0 else 1.0)
+        tired = float(np.clip((c.fatigue - TIRED_FROM) / (1.0 - TIRED_FROM), 0.0, 1.0))
+        max_fwd = sp.max_speed * (1.0 - (1.0 - sp.tired_speed_cap) * tired)
         if sp.max_backward_speed > 0:
             target_v = a[0] * max_fwd if a[0] >= 0 else a[0] * sp.max_backward_speed
         else:
@@ -459,7 +472,10 @@ class CreatureEnv(gym.Env):
 
     def _reset_prey(self, rng):
         cfg = self.habitat.prey
-        areas = [k for k in self.habitat.home_zones for _ in range(int(cfg["per_territory"]))]
+        per = {k: int(cfg["per_territory"]) for k in self.habitat.home_zones}
+        if self.low_stock_prob and rng.uniform() < self.low_stock_prob:
+            per[self.ego.zone] = int(rng.integers(1, 3))          # a lean day: raiding will be needed
+        areas = [k for k in self.habitat.home_zones for _ in range(per[k])]
         areas += [NEUTRAL] * int(cfg["neutral"])
         self.prey_area = np.array(areas, dtype=object)
         self.prey_pos = np.array([self._spawn_point(rng, a) for a in areas])
@@ -586,6 +602,10 @@ class CreatureEnv(gym.Env):
 
         rays = self.habitat.ray_distances(c.pos, c.heading + self._ray_offsets, RAY_RANGE)
         obs += list(rays / RAY_RANGE)
+        if getattr(c, "obs_version", 2) >= 2:
+            stock = self.prey_stock()[c.zone] / max(int(self.habitat.prey["per_territory"]), 1)
+            intruder = any(o.species.name != sp.name and c.home.contains(o.pos) for o in self.creatures if o is not c)
+            obs += [min(stock, 1.0), 1.0 if intruder else 0.0]
         return np.clip(np.asarray(obs, dtype=np.float32), -1.0, 1.0)
 
     def observe(self, cid):

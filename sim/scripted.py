@@ -9,19 +9,23 @@ import math
 
 import numpy as np
 
-from sim.creature_env import NEUTRAL, _wrap
+from sim.creature_env import NEUTRAL, RAYS, _wrap
 
 RAID_BELOW = 2          # raid once the home stock is down to this many prey
 SPRINT_RANGE = 8.0      # m, sprint only this close to the prey (sprinting all the way exhausts the creature)
 
 
 class ScriptedPredator:
-    def __init__(self, seed=0):
+    def __init__(self, seed=0, intrude_prob=0.0):
+        """intrude_prob: share of days on which it patrols inside the rival's territory (training defence)."""
         self.rng = np.random.default_rng(seed)
+        self.intrude_prob = intrude_prob
+        self.intruding = False
         self.patrol = None
 
     def reset(self):
         self.patrol = None
+        self.intruding = self.rng.uniform() < self.intrude_prob
 
     def __call__(self, obs, c, env):
         sp = c.species
@@ -47,6 +51,11 @@ class ScriptedPredator:
             target = env.prey_pos[i]
             if dd[i] < SPRINT_RANGE:                    # walk there, sprint only for the final catch
                 speed = 1.0
+        elif self.intruding:
+            rival_zone = next(z for k, z in env.habitat.home_zones.items() if k != c.zone)
+            if self.patrol is None or np.hypot(*(self.patrol - c.pos)) < 2 or not rival_zone.contains(self.patrol):
+                self.patrol = env.habitat.random_free_point(self.rng, margin=2, region=rival_zone)
+            target = self.patrol
         elif not c.home.contains(c.pos):
             target = c.home.center
         else:
@@ -55,7 +64,7 @@ class ScriptedPredator:
             target = self.patrol
 
         err = _wrap(math.atan2(target[1] - c.pos[1], target[0] - c.pos[0]) - c.heading)
-        rays = obs[-8:]                                  # 0 = ahead, 1 / 7 = 45 deg left / right
+        rays = obs[RAYS]                                  # 0 = ahead, 1 / 7 = 45 deg left / right
         if min(rays[0], rays[1], rays[7]) < 0.3:
             err += 0.8 if rays[1] > rays[7] else -0.8
         turn = float(np.clip(err / math.radians(45), -1, 1))

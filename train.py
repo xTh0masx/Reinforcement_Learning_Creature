@@ -74,20 +74,29 @@ def main():
     p.add_argument("--envs", type=int, default=8)
     p.add_argument("--run", default=None)
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--resume", default=None, help="models/<run> to continue from (next round)")
+    p.add_argument("--resume", default=None,
+                   help="models/<run> (next round) or checkpoints/<run>_<N>_steps (continue an interrupted run); "
+                        "--steps then counts the additional steps")
     p.add_argument("--ckpt-every", type=float, default=500_000)
     p.add_argument("--no-curriculum", action="store_true", help="prey at full difficulty from the start")
+    p.add_argument("--rival-intrude", type=float, default=0.5, help="share of days the scripted rival invades")
+    p.add_argument("--low-stock", type=float, default=0.3, help="share of days starting with 1-2 prey at home")
+    p.add_argument("--obs-version", type=int, default=2)
     args = p.parse_args()
     run = args.run or f"{args.species[:3]}_brain_v1"
     torch.set_num_threads(2)
 
-    others = [{"species": args.rival, "brain": args.rival_brain}] if args.rival else None
+    others = [{"species": args.rival, "brain": args.rival_brain, "intrude_prob": args.rival_intrude}] \
+        if args.rival else None
     env = make_vec_env(CreatureEnv, n_envs=args.envs, seed=args.seed, vec_env_cls=SubprocVecEnv,
-                       env_kwargs={"species": args.species, "others": others})
+                       env_kwargs={"species": args.species, "others": others, "obs_version": args.obs_version,
+                                   "low_stock_prob": args.low_stock})
     env = VecFrameStack(env, n_stack=3)
     if args.resume:
-        env = VecNormalize.load(f"{args.resume}_vecnormalize.pkl", env)
+        from play_locomotion import vecnormalize_path          # handles models/<run> and checkpoints/<run>_<N>_steps
+        env = VecNormalize.load(vecnormalize_path(args.resume), env)
         model = PPO.load(args.resume, env=env, tensorboard_log="runs/")
+        print(f"resumed {args.resume} at {model.num_timesteps} steps")
     else:
         env = VecNormalize(env, norm_reward=True)
         model = PPO(

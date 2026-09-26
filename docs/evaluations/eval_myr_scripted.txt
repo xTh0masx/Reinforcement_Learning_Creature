@@ -1,0 +1,9 @@
+myrranox - scripted vs dc (scripted), 5 days of 10 min:
+  survived 554 s on average, starved in 4/5 days
+  [fail] time inside own zone                                 88 %   (target >= 90 %)
+  [fail] time with hunger at 100 %                            11 %   (target <= 5 %)
+  [PASS] prey caught per 10 min                               3.47   (target >= 3)
+  [PASS] rest-spot visits when fatigue > 50 % per 10 min      3.73   (target >= 1)
+  [PASS] obstacle/boundary hits per 10 min                    0.42   (target <= 1)
+  also: raids 0.20 / 10 min, time in rival zone 11 %, intruders repelled 0.25 / 10 min
+  3/5 checks passed

@@ -8,8 +8,12 @@ import numpy as np
 class NavBrain:
     def __init__(self, path, n_stack=3):
         from stable_baselines3 import PPO
+        import re
+        path = str(path).removesuffix(".zip")
+        m = re.match(r"(.*)_(\d+)_steps$", path)          # checkpoints/<run>_<N>_steps
+        norm = f"{m.group(1)}_vecnormalize_{m.group(2)}_steps.pkl" if m else f"{path}_vecnormalize.pkl"
         self.model = PPO.load(path, device="cpu")
-        with open(f"{path}_vecnormalize.pkl", "rb") as f:
+        with open(norm, "rb") as f:
             self.norm = pickle.load(f)
         self.frames = deque(maxlen=n_stack)
 

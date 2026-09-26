@@ -81,8 +81,7 @@ class HabitatViewer:
             f"speed {env.speed:5.2f} m/s  turn {math.degrees(env.turn_rate):6.1f} deg/s\n"
             f"activity {env.activity}\n"
             f"prey {s['prey_caught']}  hits {s['hits']}  reward {s['reward']:8.2f}"
-            + (f"
-raids {s.get('raid_prey_eaten', 0)}  stock " +
+            + (f"\nraids {s.get('raid_prey_eaten', 0)}  stock " +
                " ".join(f"{k[:3]}:{v}" for k, v in env.prey_stock().items()) if hasattr(env, "prey_stock") else "")
         )
         if self.interactive:

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-from sim.creature_env import DT, CreatureEnv, _wrap
+from sim.creature_env import DT, CreatureEnv, RAYS, _wrap
 from sim.species import SPECIES
 
 
@@ -55,7 +55,7 @@ class HeuristicPolicy:
 
         err = _wrap(math.atan2(target[1] - env.pos[1], target[0] - env.pos[0]) - env.heading)
         # Obstacle rays: 0 = ahead, 1/7 = 45 deg left/right (normalised to RAY_RANGE)
-        rays = obs[-8:]
+        rays = obs[RAYS]
         if min(rays[0], rays[1], rays[7]) < 0.3:
             err += 0.8 if rays[1] > rays[7] else -0.8
         turn = float(np.clip(err / math.radians(45), -1, 1))
