@@ -84,6 +84,9 @@ def _read(path):
             tr["y"].append(float(row["y"]))
             tr["heading"].append(float(row["heading"]))
             tr["activity"].append(row["activity"])
+            for k in ("hunger", "fatigue"):                  # record_world.py recordings carry the needs
+                if row.get(k):
+                    tr[k].append(float(row[k]))
     return tracks, species
 
 
@@ -197,6 +200,68 @@ def _placeholder(col, name, size):
     return _link(col, obj)
 
 
+HUD_BARS = (("hunger", (0.85, 0.15, 0.12, 1)), ("fatigue", (0.20, 0.45, 0.90, 1)))
+
+
+def _flat_material(name, color):
+    mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    em = nt.nodes.new("ShaderNodeEmission")
+    em.inputs["Color"].default_value = color
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    nt.links.new(em.outputs[0], out.inputs[0])
+    mat.diffuse_color = color
+    return mat
+
+
+def _bar_mesh():
+    """Unit bar from x=0 to x=1 so that scaling x fills it from the left."""
+    me = bpy.data.meshes.get("RL_hud_bar")
+    if me is None:
+        me = bpy.data.meshes.new("RL_hud_bar")
+        me.from_pydata([(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)], [], [(0, 1, 2, 3)])
+    return me
+
+
+def _hud(col, cam, cid, species_name, frames, tr):
+    """Name + hunger/fatigue bars in front of the camera (top left of the image), keyed from the recording."""
+    d, w, h = 1.0, 0.30, 0.022               # distance in front of the camera, bar length, bar height (m)
+    x0, y0 = -0.62, 0.24
+    white = _flat_material("RL_hud_text", (0.95, 0.95, 0.95, 1))
+    grey = _flat_material("RL_hud_back", (0.15, 0.15, 0.15, 1))
+
+    def child(obj, loc, scale=(1, 1, 1)):
+        col.objects.link(obj)
+        obj.parent = cam
+        obj.location = (loc[0], loc[1], -d)
+        obj.scale = scale
+        return obj
+
+    title = bpy.data.curves.new(f"HUD_{cid}_title", "FONT")
+    title.body = f"{species_name}  ({cid})"
+    title.size = 0.035
+    t = child(bpy.data.objects.new(f"HUD_{cid}_title", title), (x0, y0 + 0.05))
+    t.data.materials.append(white)
+    for i, (need, color) in enumerate(HUD_BARS):
+        y = y0 - i * 0.045
+        label = bpy.data.curves.new(f"HUD_{cid}_{need}_label", "FONT")
+        label.body = need
+        label.size = 0.022
+        lo = child(bpy.data.objects.new(f"HUD_{cid}_{need}_label", label), (x0, y))
+        lo.data.materials.append(white)
+        back = child(bpy.data.objects.new(f"HUD_{cid}_{need}_back", _bar_mesh().copy()), (x0 + 0.1, y, ), (w, h, 1))
+        back.data.materials.append(grey)
+        bar = child(bpy.data.objects.new(f"HUD_{cid}_{need}", _bar_mesh().copy()), (x0 + 0.1, y), (w, h, 1))
+        bar.location.z = -d + 0.001
+        bar.data.materials.append(_flat_material(f"RL_hud_{need}", color))
+        if tr.get(need):
+            vals = np.clip(np.asarray(tr[need]), 0.001, 1.0)
+            _key(_fcurves(bar), "scale", 0, frames[:len(vals)], w * vals, 1)
+
+
 def _follow_camera(col, root, cid, species_name):
     rig = _link(col, bpy.data.objects.new(f"CamRig_{cid}", None))
     c = rig.constraints.new("COPY_LOCATION"); c.target = root
@@ -273,6 +338,8 @@ def import_csv(path):
         if model is None:
             _placeholder(col, f"{cid}_body", ASSETS.get(species[cid], {}).get("size", 1.0)).parent = root
         cameras.append(_follow_camera(col, root, cid, species[cid]))
+        if tr.get("hunger"):
+            _hud(col, cameras[-1], cid, species[cid], frames, tr)
 
     scene.frame_start, scene.frame_end = 1, last_frame
     for m in [m for m in scene.timeline_markers if m.name.startswith("cam_")]:

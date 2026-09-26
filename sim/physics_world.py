@@ -55,9 +55,11 @@ class PhysicsWorld:
         q = self.data.qpos[b.q0:b.q0 + 7]
         return {"pos": q[:2].copy(), "heading": _yaw(q[3:7])}
 
-    def step(self):
-        """Advance NAV_DT seconds. Returns per creature: pos, heading, speed, turn_rate, energy (J), fell."""
+    def step(self, record_poses=False):
+        """Advance NAV_DT seconds. Returns per creature: pos, heading, speed, turn_rate, energy (J), fell,
+        and with record_poses the pose (LocomotionEnv.pose) after each of the 5 control steps (50 Hz)."""
         energy = {i: 0.0 for i in self.ids}
+        poses = {i: [] for i in self.ids}
         fell = {i: False for i in self.ids}
         infos = {}
         for _ in range(SUBSTEPS):
@@ -74,12 +76,14 @@ class PhysicsWorld:
                     s = self.state(i)
                     self.obs[i], _ = self.bodies[i].reset(options={
                         "command": tuple(self.bodies[i].command), "pos": tuple(s["pos"]), "yaw": s["heading"]})
+                if record_poses:
+                    poses[i].append(self.bodies[i].pose())
             self.t += CONTROL_DT
         out = {}
         for i in self.ids:
             s = self.state(i)
             out[i] = {**s, "speed": infos[i]["speed"], "turn_rate": infos[i]["turn_rate"],
-                      "energy": energy[i], "fell": fell[i]}
+                      "energy": energy[i], "fell": fell[i], "poses": poses[i]}
         return out
 
     def pose(self, cid):

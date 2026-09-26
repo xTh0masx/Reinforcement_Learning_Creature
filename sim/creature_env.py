@@ -338,7 +338,11 @@ class CreatureEnv(gym.Env):
         c._hit = contact and getattr(c, "_free_time", HIT_FREE_TIME) >= HIT_FREE_TIME
         c._free_time = 0.0 if contact else getattr(c, "_free_time", HIT_FREE_TIME) + DT
         c._contact = contact
-        return body["energy"] / DT if "energy" in body else self._power_estimate(c)
+        # Hunger/fatigue use the same power curve (from the body's real speed and turn rate) as in 2D training;
+        # the physics body's instantaneous power includes controller effort for every command change and would
+        # starve a brain trained on the curve. The measured power is kept for statistics.
+        c._power_measured = body["energy"] / DT if "energy" in body else None
+        return self._power_estimate(c)
 
     def _obstacle_normal(self, p):
         """Unit vector pointing away from the nearest rock or wall at p."""

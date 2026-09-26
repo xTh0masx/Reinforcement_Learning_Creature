@@ -30,7 +30,8 @@ The recorded body pose and joint angles are played back on the rigged models in 
 | 25 Sep | Locomotion **v1** (4M steps each) | Both walk, never fall – but unnatural gaits |
 | 25 Sep | Locomotion **v2** – natural gait (4M steps each) | Insect tripod / quadruped walk→trot, symmetric, 2.4–5× less energy |
 | 25 Sep | **B** physics habitat world; **C** predator rules (territories, raids, energy-driven hunger, rival) | Tested; two design problems found and fixed |
-| 25 Sep | Prey made slower (0.9 → 0.7 m/s, owner decision); **D1** predator brains started | running |
+| 25 Sep | Prey made slower (0.9 → 0.7 m/s, owner decision); **D1** predator brains started | two failed attempts, then learning |
+| 26 Sep | D1 round 1 + option B; DC predator brain released; showcase recording in Blender | DC hunts with real legs; Myrranox fails in physics |
 
 ---
 
@@ -123,6 +124,35 @@ Hunger and fatigue use the power curve measured from the v2 brains (`sim/energy.
 
 ---
 
+## 6b. Predator brains (step D1, 25–26 Sep)
+
+| Attempt | Result | Lesson |
+| --- | --- | --- |
+| `*_brain_v1_r1` – plan reward (section 8) | stayed home and starved (0 prey) | even a good scripted hunter scored negative: the reward hardly separated hunting from starving |
+| `*_brain_v2_r1` – reward v2 (fed + every catch + hunting guide) | stood still (0 prey) | half the action range meant "stop"; the guide paid for standing (discount); fleeing prey never caught by chance |
+| pilot (400k) – exploration fixes | learns to hunt (0 → 2.5 prey / 10 min) | full speed range, undiscounted guide, prey-flee curriculum, hit counted after 1 s |
+| `*_brain_v3_r1` – round 1, 3M steps | hunt 4.0–4.4 prey / 10 min, but never raid, rest or defend | rare situations (empty home, intruder) are seldom experienced |
+| `*_brain_v4_r1` – option B (home-stock + intruder inputs, lean days, invading rival, fatigue from 70 %) | **DC: released** – survives every day, 4.6 prey, rests (4/5 checks). Myrranox worse (0/5) | the Myrranox tires ~2× faster than the DC (gait energy) |
+
+Released: **DC `models/dc_brain_v4_r1`**, **Myrranox `models/myr_brain_v3_r1`** (best Myrranox; owner decision to keep it).
+Section 12 evaluations: `docs/evaluations/`. Raids and territory defence were not learned by any brain.
+
+## 6c. Showcase: both predators with real walking (step F, 26 Sep)
+
+`record_world.py` runs both predator brains together; their commands drive the v2 walking brains in the MuJoCo habitat
+(solid rocks and walls). Recording `recordings/showcase.csv` (+ 50 Hz pose files), imported into
+`blender/habitat_showcase.blend` (5182 frames = 2:53 at 30 fps, follow cameras switch at frame 2592, hunger/fatigue bars
+in each camera view).
+
+- **DC:** hunts successfully with its real legs – 2 prey in 3 min, stays well fed.
+- **Myrranox:** does not transfer from 2D to the physics body (owner decision: show it as is). It cannot turn on the spot
+  (walking v2), so it stalls at the start, comes within 1.4–2.4 m of prey but the real body turns and accelerates more
+  slowly than the 2D model it was trained with, gets stuck at a rock and starves after 173 s (0 prey).
+  Fix options kept for later: walking v3 with turning on the spot, or fine-tuning the predator brain with the physics
+  body (plan D2, slow on CPU).
+- Hunger/fatigue in the physics world use the same power curve as the 2D training (speed/turn → power): the body's
+  instantaneous power includes controller effort for every command change and starved the Myrranox in 132 s.
+
 ## 7. Videos and graphs
 
 | File | What it shows |
@@ -138,6 +168,8 @@ Hunger and fatigue use the power curve measured from the v2 brains (`sim/energy.
 | `figures/gait/<run>_footfall_<speed>.png` | Footfall diagrams (dark = foot on the ground); v1 vs v2 is the clearest before/after slide |
 | `figures/gait/*_legs_v2_<N>_steps_footfall_*.png` | Gait during v2 training (1M, 1.5M, 2.75M, 3.5M) |
 | `figures/myr_legs_pilot2_1M.gif` | Pilot 2 standing still at 1M steps |
+| `evaluations/*.txt, *.json` | Section 12 checks of the predator brains and the scripted baseline |
+| `../blender/habitat_showcase.blend` + `../recordings/showcase*.csv` | Both predators in the habitat with real walking, hunger/fatigue display |
 
 Live during training: `tensorboard --logdir runs`, `python watch_locomotion.py --run <run> --species <species>`.
 
