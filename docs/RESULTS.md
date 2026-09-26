@@ -173,6 +173,7 @@ creature, overview camera, panel "Creatures" (side views, follow + free orbit, b
 | `figures/gait/<run>_footfall_<speed>.png` | Footfall diagrams (dark = foot on the ground); v1 vs v2 is the clearest before/after slide |
 | `figures/gait/*_legs_v2_<N>_steps_footfall_*.png` | Gait during v2 training (1M, 1.5M, 2.75M, 3.5M) |
 | `figures/myr_legs_pilot2_1M.gif` | Pilot 2 standing still at 1M steps |
+| `videos/showcase_side_by_side.mp4` | **Showcase, 5:00**: Myrranox (left) and DC (right) living in the habitat, everything learned (predator + walking brains), steady side cameras with hunger/fatigue – rendered from `blender/habitat_showcase.blend` |
 | `evaluations/*.txt, *.json` | Section 12 checks of the predator brains and the scripted baseline |
 | `../blender/habitat_showcase.blend` + `../recordings/showcase*.csv` | Both predators in the habitat with real walking, hunger/fatigue display |
 
