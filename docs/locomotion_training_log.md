@@ -28,8 +28,8 @@ speed/turn commands every 2–5 s, 15 % standing), PPO with 8 parallel environme
 | 6 | 25 Sep 2026 | `myr_legs_v2` | Myrranox | **4M** | **Natural gait (v2):** per-leg gait clock in the observation; rewards for following the insect tripod (stance legs down + swing legs up, scored so that standing still earns nothing), foot clearance 3 cm, air time per step, energy (torque × joint speed), joint acceleration; turn reward 0.5 → 1.0; 10 % turn-on-the-spot and 10 % backwards commands; mirror-symmetry loss (`SymmetricPPO`) | **Tripod gait**, all 6 legs step at 2.3–3.7 steps/s (v1: 3 legs tapping at 9–12 Hz). Walking turns now symmetric (+57 / −54 °/s at ±54, v1: +56 / −31). ~5× less power (97 W at full speed). Mid-training: speed dip at 1.5M (penalties at full strength), front-right leg held up at 2.75M, fixed by 3.5M. Still weak: turning on the spot, walking backwards, walk speed 0.53 of 0.6 m/s. |
 | 7 | 25 Sep 2026 | `dc_legs_v2` | DC | **4M** | Same as #6 (walk → trot gait) | **Diagonal walk / trot**: hind legs alternate (v1 hopped with both), diagonal pairs together; 1.7 steps/s walking, 2.8 trotting; asymmetry 1.3° at trot. Turns ~65 % of the command (v1 ~25 %). ~2.4× less power (1.56 kW at full speed). No falls after 1.25M. Speed below command: 0.68 of 0.8, 2.15 of 2.5 m/s. |
 
-| 8 | 26 Sep 2026 | `myr_legs_v3` | Myrranox | 4M | **"Alive" body, stage 2:** head (2) and abdomen (2) get motors (their springs from stage 1 stay and carry the weight) → 22 actuators; new rewards: head steadiness (head rotation not explained by the commanded turn) and a level head; mirror symmetry over all joints | *training* |
-| 9 | 26 Sep 2026 | `dc_legs_v3` | DC | 4M | **Stage 2:** spine joint (bend + sideways) splits the chest – the rear body carries hind legs and tail; neck (2) and head (1) get motors; tail and extra arms stay passive (stage 1) → 21 actuators; same rewards as #8 | *training* |
+| 8 | 26 Sep 2026 | `myr_legs_v3` | Myrranox | 4M | **"Alive" body, stage 2:** head (2) and abdomen (2) get motors (their springs from stage 1 stay and carry the weight) → 22 actuators; new rewards: head steadiness (head rotation not explained by the commanded turn) and a level head; mirror symmetry over all joints | **Failed:** walked at 0.5–0.75M (0.5–0.6 m/s), then **learned to stand still** from 1.25M (0.00 m/s at every command) – once the penalty curriculum made the head-steadiness penalty strong, every step bounced the light head and standing was cheaper (same trap as pilot 2). Not released. |
+| 9 | 26 Sep 2026 | `dc_legs_v3` | DC | 4M | **Stage 2:** spine joint (bend + sideways) splits the chest – the rear body carries hind legs and tail; neck (2) and head (1) get motors; tail and extra arms stay passive (stage 1) → 21 actuators; same rewards as #8 | **Success – released.** Walk 0.83 / 0.8 m/s, trot 2.69 / 2.5 m/s (v2: 0.68 / 2.15 – the spine helps), turns ±21 of ±36 °/s, no falls. Head wobble 0.69 rad/s (v2 + passive parts: 1.17, −41 %), spine ±3.2° sideways / ±1.3° up-down, tail tip ±15.5° (v2: ±10.6°), asymmetry 1.9–3.4°. Power higher (947 W vs 656 W). |
 
 Reward values are **not comparable between sessions** — the reward definition changed each time.
 Compare sessions by the evaluation metrics (`metrics.csv`: speed/turn tracking error, falls, foot slip).
@@ -82,6 +82,12 @@ Owner request: the whole body should move – Myrranox like an ant, DC like a pa
   both bodies stand. Baseline "aliveness" with v2 + passive parts (`alive_metrics.py`): the loose head wobbles about
   twice as much as the torso (DC 1.17 vs 0.59 rad/s, Myrranox 1.74 vs 0.62 rad/s) – v3 should calm it.
 
+**Stage 2 result:** the DC walks faster, uses its spine, holds its head steadier and swings its tail more
+(`docs/videos/dc_legs_v2_vs_v3.mp4`, `docs/videos/dc_legs_v3_training.mp4`, `docs/evaluations/alive_dc.json`).
+The Myrranox v3 failed (stands still; `docs/videos/myr_legs_v3_training.mp4`, `myr_legs_v2_vs_v3.mp4`) – it keeps
+walking v2 with the stage-1 passive parts until a fix (weaker head penalty for the light head, or continue from
+the 0.75M checkpoint where it still walked).
+
 ## Lessons
 
 1. A penalty that is large for the untrained policy's jitter (foot slip) swamps the task reward.
@@ -94,6 +100,9 @@ Owner request: the whole body should move – Myrranox like an ant, DC like a pa
    for free; scoring stance legs and swing legs separately fixed that (checked before training, `tests/test_locomotion_v2.py`).
 6. (v2) Mirror symmetry fixed the one-sided turning of v1 (Myrranox right turns 31 → 54 °/s).
 7. (v2) Mid-training setbacks recover (speed dip at 1.5M, a raised leg at 2.75M) — judge a run by its end, keep all checkpoints.
+8. (v3) A "style" penalty that every step pays (head wobble) can make standing still the best option again as the
+   penalty curriculum ramps up – the light Myrranox head bounces with each step and the brain stopped walking; the
+   heavy, well-suspended DC head did not. Style terms need to be weak or scaled per species.
 
 ## Next ideas (one change per run)
 

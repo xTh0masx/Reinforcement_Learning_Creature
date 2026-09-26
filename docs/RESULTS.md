@@ -193,6 +193,19 @@ unchanged speed and turning). Recording and Blender rigs include the new joints.
 `videos/alive_stage1_preview.mp4`. Next: stage 2 (actively controlled spine/neck/head, RL) and stage 3 (gaze, eating,
 idle motion).
 
+## 6e. "Alive" bodies – stage 2: controlled spine / neck / head (walking v3, 26 Sep)
+
+| | DC v2 + passive parts | **DC v3 (released)** | Myrranox v2 + passive | Myrranox v3 |
+| --- | --- | --- | --- | --- |
+| Walk / full speed (m/s) | 0.68 / 2.15 | **0.83 / 2.69** | 0.58 / 1.35 | 0.00 / 0.02 (stands still) |
+| Head wobble (rad/s) | 1.17 | **0.69** | 1.74 | (1.00, standing) |
+| Spine / tail tip swing (°, std) | – / 10.6 | **3.2 / 15.5** | – | – |
+| Falls | 0 | 0 | 0 | 0 |
+
+The DC transferred the new control into faster, more fluid, steadier-headed walking. The Myrranox learned to stand
+still once the head-steadiness penalty ramped up (lesson 8 in the walking log); it keeps v2 + passive parts until
+a fix. Videos: `videos/dc_legs_v2_vs_v3.mp4`, `videos/*_legs_v3_training.mp4`.
+
 ## 7. Videos and graphs
 
 | File | What it shows |
@@ -209,6 +222,7 @@ idle motion).
 | `figures/gait/*_legs_v2_<N>_steps_footfall_*.png` | Gait during v2 training (1M, 1.5M, 2.75M, 3.5M) |
 | `figures/myr_legs_pilot2_1M.gif` | Pilot 2 standing still at 1M steps |
 | `videos/showcase_side_by_side.mp4` | **Showcase, 5:00**: Myrranox (left) and DC (right) living in the habitat, everything learned (predator + walking brains), steady side cameras with hunger/fatigue – rendered from `blender/habitat_showcase.blend` |
+| `videos/*_legs_v3_training.mp4`, `videos/*_legs_v2_vs_v3.mp4` | Walking v3 (alive body): whole training; stage 1 vs stage 2 side by side |
 | `videos/predator/<run>_training.mp4` | Every predator training run (8): one habitat day per checkpoint, untrained → 3M, next to the learning curve |
 | `evaluations/*.txt, *.json` | Section 12 checks of the predator brains and the scripted baseline |
 | `../blender/habitat_showcase.blend` + `../recordings/showcase*.csv` | Both predators in the habitat with real walking, hunger/fatigue display |

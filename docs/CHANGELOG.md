@@ -7,6 +7,11 @@ time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
 ## 26 Sep 2026
 
+**Stage 2 results:** DC `models/dc_legs_v3` released (faster, spine used, head −41 % wobble, tail swings more);
+Myrranox v3 failed (learned to stand still once the head penalty ramped up) – stays on v2 + passive parts.
+Videos: `docs/videos/*_legs_v3_training.mp4`, `*_legs_v2_vs_v3.mp4`; figures `docs/figures/locomotion/*_legs_v3/`,
+`docs/figures/gait/*_legs_v3_*`; aliveness `docs/evaluations/alive_*.json`.
+
 **"Alive" bodies, stage 2: walking v3** (`4032c93`, owner request)
 - `sim/bodies.py active=True`: DC spine joint (`RearSegment`: rear body with hind legs and tail), actuated neck/head;
   Myrranox actuated head/abdomen; springs stay; per-joint motor gains and action ranges.
