@@ -57,14 +57,17 @@ def rig(repo_root):
     for p in (repo_root, f"{repo_root}/blender/scripts"):
         if p not in sys.path:
             sys.path.insert(0, p)
-    from rig_common import add_passive_bones, body_frame_matrix, build_armature, split_left_right, store_joint_metadata
+    from rig_common import (add_passive_bones, add_spine, body_frame_matrix, build_armature, split_left_right,
+                            store_joint_metadata)
     from sim.bodies import dc
-    spec = dc(passive=True)
+    spec = dc(passive=True, active=True)             # stage 2: spine joint + actuated neck/head
 
     existing = bpy.data.objects.get(RIG)
     if existing is not None:
         store_joint_metadata(existing, spec)
-        add_passive_bones(existing, spec)          # tail/neck/head/arm bones exist already; adds their spring joints
+        add_passive_bones(existing, spec)          # tail/neck/head/arm bones exist already; adds their joints
+        if add_spine(existing, spec):              # new spine bone -> re-weight the proxy so the back can bend
+            bind(bpy.data.objects[PROXY], existing)
         return existing
 
     asset = bpy.data.objects[ASSET]
@@ -84,6 +87,7 @@ def rig(repo_root):
     mw = proxy.matrix_world.copy()
     proxy.parent = None
     proxy.matrix_world = mw
+    add_spine(arm, spec)
     bind(proxy, arm)
     _attach_parts(arm)
     add_passive_bones(arm, spec)

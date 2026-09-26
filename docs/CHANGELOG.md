@@ -7,6 +7,15 @@ time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
 ## 26 Sep 2026
 
+**"Alive" bodies, stage 2: walking v3** (`4032c93`, owner request)
+- `sim/bodies.py active=True`: DC spine joint (`RearSegment`: rear body with hind legs and tail), actuated neck/head;
+  Myrranox actuated head/abdomen; springs stay; per-joint motor gains and action ranges.
+- `LocomotionEnv(version=3)`: head-steadiness and head-level rewards; generic mirror symmetry; tests for v3.
+- `PhysicsWorld` builds the body matching each walking brain's version.
+- Blender: DC `spine_rear` bone (hind legs + tail on it, proxy re-weighted); `alive_metrics.py`,
+  `make_comparison_video.py --passive`; post-processing script for v3 (`logs/post_v3.sh`).
+- Training `myr_legs_v3`, `dc_legs_v3` (4M steps each).
+
 **"Alive" bodies, stage 1: passive body parts** (owner request: whole body should move, ant / panther-like)
 - `sim/bodies.py` `PassiveChain`: spring-damper joints (no motor, not brain-controlled). Myrranox: abdomen
   (petiole: up/down + sideways) and head. DC: tail in 2 segments, neck + head, both extra arms – on the existing

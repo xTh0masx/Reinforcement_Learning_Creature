@@ -28,6 +28,9 @@ speed/turn commands every 2–5 s, 15 % standing), PPO with 8 parallel environme
 | 6 | 25 Sep 2026 | `myr_legs_v2` | Myrranox | **4M** | **Natural gait (v2):** per-leg gait clock in the observation; rewards for following the insect tripod (stance legs down + swing legs up, scored so that standing still earns nothing), foot clearance 3 cm, air time per step, energy (torque × joint speed), joint acceleration; turn reward 0.5 → 1.0; 10 % turn-on-the-spot and 10 % backwards commands; mirror-symmetry loss (`SymmetricPPO`) | **Tripod gait**, all 6 legs step at 2.3–3.7 steps/s (v1: 3 legs tapping at 9–12 Hz). Walking turns now symmetric (+57 / −54 °/s at ±54, v1: +56 / −31). ~5× less power (97 W at full speed). Mid-training: speed dip at 1.5M (penalties at full strength), front-right leg held up at 2.75M, fixed by 3.5M. Still weak: turning on the spot, walking backwards, walk speed 0.53 of 0.6 m/s. |
 | 7 | 25 Sep 2026 | `dc_legs_v2` | DC | **4M** | Same as #6 (walk → trot gait) | **Diagonal walk / trot**: hind legs alternate (v1 hopped with both), diagonal pairs together; 1.7 steps/s walking, 2.8 trotting; asymmetry 1.3° at trot. Turns ~65 % of the command (v1 ~25 %). ~2.4× less power (1.56 kW at full speed). No falls after 1.25M. Speed below command: 0.68 of 0.8, 2.15 of 2.5 m/s. |
 
+| 8 | 26 Sep 2026 | `myr_legs_v3` | Myrranox | 4M | **"Alive" body, stage 2:** head (2) and abdomen (2) get motors (their springs from stage 1 stay and carry the weight) → 22 actuators; new rewards: head steadiness (head rotation not explained by the commanded turn) and a level head; mirror symmetry over all joints | *training* |
+| 9 | 26 Sep 2026 | `dc_legs_v3` | DC | 4M | **Stage 2:** spine joint (bend + sideways) splits the chest – the rear body carries hind legs and tail; neck (2) and head (1) get motors; tail and extra arms stay passive (stage 1) → 21 actuators; same rewards as #8 | *training* |
+
 Reward values are **not comparable between sessions** — the reward definition changed each time.
 Compare sessions by the evaluation metrics (`metrics.csv`: speed/turn tracking error, falls, foot slip).
 
@@ -68,6 +71,16 @@ curves than it asks for.
 
 Footfall diagrams: `docs/figures/gait/<run>_footfall_<speed>.png`. v2 trades a little speed accuracy for a natural,
 symmetric, far more efficient gait. Open: Myrranox turn on the spot / backwards; both slightly slower than commanded.
+
+## "Alive" bodies (stages 1–2, 26 Sep 2026)
+
+Owner request: the whole body should move – Myrranox like an ant, DC like a panther with extra arms.
+- **Stage 1** (no training): spring-damper tail, abdomen, head, neck and arms (`sim/bodies.py` `PassiveChain`); the
+  v2 brains walk unchanged with them. Preview: `docs/videos/alive_stage1_preview.mp4`.
+- **Stage 2** (walking v3): spine / neck / head / abdomen actively controlled, head-steadiness rewards.
+  Checks before training: exact mirror simulation for v3 (incl. spine, head and the passive parts), `check_env`,
+  both bodies stand. Baseline "aliveness" with v2 + passive parts (`alive_metrics.py`): the loose head wobbles about
+  twice as much as the torso (DC 1.17 vs 0.59 rad/s, Myrranox 1.74 vs 0.62 rad/s) – v3 should calm it.
 
 ## Lessons
 

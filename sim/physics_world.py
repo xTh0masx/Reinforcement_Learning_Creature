@@ -30,16 +30,21 @@ class PhysicsWorld:
         """passive=True: bodies with spring-damper tail / abdomen / head / arms (stage 1 "alive" bodies)."""
         from play_locomotion import Brain
         self.ids = [c["id"] for c in creatures]
-        specs = [(BODIES[c["species"]](passive=passive), f'{c["id"]}_', tuple(c["pos"]), c.get("yaw", 0.0))
-                 for c in creatures]
-        self.model = mujoco.MjModel.from_xml_string(build_world_mjcf(specs, habitat))
-        self.data = mujoco.MjData(self.model)
         self.brains, self.bodies, self.obs = {}, {}, {}
         for c in creatures:
-            brain = c["brain"] if "brain" in c else Brain(c["loco"], c["species"])
-            body = LocomotionEnv(c["species"], episode_seconds=1e9, version=getattr(brain, "version", 1),
-                                 model=self.model, data=self.data, prefix=f'{c["id"]}_', passive=passive)
-            self.brains[c["id"]], self.bodies[c["id"]] = brain, body
+            self.brains[c["id"]] = c["brain"] if "brain" in c else Brain(c["loco"], c["species"])
+        # The body must match the walking brain: version 3 brains control spine / neck / head (active parts)
+        specs = []
+        for c in creatures:
+            v = getattr(self.brains[c["id"]], "version", 1)
+            spec = BODIES[c["species"]](passive=True, active=True) if v >= 3 else BODIES[c["species"]](passive=passive)
+            specs.append((spec, f'{c["id"]}_', tuple(c["pos"]), c.get("yaw", 0.0)))
+        self.model = mujoco.MjModel.from_xml_string(build_world_mjcf(specs, habitat))
+        self.data = mujoco.MjData(self.model)
+        for c in creatures:
+            brain = self.brains[c["id"]]
+            self.bodies[c["id"]] = LocomotionEnv(c["species"], episode_seconds=1e9, version=getattr(brain, "version", 1),
+                                                 model=self.model, data=self.data, prefix=f'{c["id"]}_', passive=passive)
         self.t = 0.0
         self.falls = {i: 0 for i in self.ids}
         for c in creatures:

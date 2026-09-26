@@ -129,3 +129,35 @@ def add_passive_bones(arm, spec, parts=None):
             if n in bpy.data.objects:
                 attach_to_bone(bpy.data.objects[n], arm, bone)
     return arm
+
+
+def add_spine(arm, spec):
+    """Stage 2 DC spine: bone on the physics spine joint (RearSegment) carrying the hind legs and the tail, with its
+    joints stored as rl_joints. Returns True if the bone was created (the mesh must then be re-weighted)."""
+    r = spec.rear
+    if r is None:
+        return False
+    created = r.bone not in arm.data.bones
+    if created:
+        for o in bpy.context.selected_objects:
+            o.select_set(False)
+        bpy.context.view_layer.objects.active = arm
+        arm.select_set(True)
+        bpy.ops.object.mode_set(mode="EDIT")
+        eb = arm.data.edit_bones
+        b = eb.new(r.bone)
+        b.head = Vector(r.point)
+        a, c, _, _ = r.geoms[0]
+        b.tail = Vector(r.point) + Vector(c)
+        b.parent = eb["torso"]
+        for leg in r.legs:
+            eb[f"{leg}_s0"].parent = b
+        for ch in spec.passive:
+            if ch.parent == r.name:
+                eb[ch.bones[0]].parent = b
+        bpy.ops.object.mode_set(mode="OBJECT")
+        for pb in arm.pose.bones:
+            pb.rotation_mode = "QUATERNION"
+    arm.data.bones[r.bone]["rl_joints"] = json.dumps(
+        [[n, *map(float, ax)] for n, ax in zip(r.joint_names(), r.joint_axes())])
+    return created

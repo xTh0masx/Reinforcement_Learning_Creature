@@ -27,6 +27,7 @@ def main():
     p.add_argument("--right", required=True)
     p.add_argument("--labels", nargs=2, default=None)
     p.add_argument("--out", default=None)
+    p.add_argument("--passive", action="store_true", help="give version 1/2 brains the stage-1 passive body parts")
     args = p.parse_args()
     labels = args.labels or [os.path.basename(args.left), os.path.basename(args.right)]
     short = {"myrranox": "myr", "dc": "dc"}[args.species]
@@ -37,7 +38,7 @@ def main():
     for path in (args.left, args.right):
         brain = Brain(path, args.species)
         env = LocomotionEnv(args.species, episode_seconds=1e9, render_mode="rgb_array", width=HALF, height=H - TOP,
-                            version=brain.version)
+                            version=brain.version, passive=args.passive)
         env.model.vis.global_.offwidth, env.model.vis.global_.offheight = W, H
         obs, _ = env.reset(seed=0, options={"command": (0.0, 0.0)})
         sides.append({"brain": brain, "env": env, "obs": obs, "speed": 0.0, "turn": 0.0, "power": 0.0, "fell": 0})

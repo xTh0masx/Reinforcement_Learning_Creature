@@ -34,7 +34,7 @@ def rig(repo_root):
     from rig_common import (add_passive_bones, attach_to_bone, body_frame_matrix, build_armature, split_left_right,
                             store_joint_metadata)
     from sim.bodies import myrranox
-    spec = myrranox(passive=True)
+    spec = myrranox(passive=True, active=True)      # stage 2: head/abdomen actuated (same joints, same bones)
 
     existing = bpy.data.objects.get(RIG)
     if existing is not None:
