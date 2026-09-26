@@ -38,9 +38,40 @@ class PassiveChain:
     bones: list
     damping_ratio: float = 0.35
     range_deg: float = 45.0
+    # Stage 2: an actuated chain keeps its springs (they carry the weight) and gets a position motor per joint
+    actuated: bool = False
+    kp: float = 0.0
+    max_torque: float = 0.0
+    action_scale: float = 0.3
+    parent: str = "torso"          # body the chain hangs on ("torso" or the rear segment)
 
     def joint_names(self):
         return [f"{self.name}_p{i}{'xyz'[k]}" for i, seg in enumerate(self.joints) for k in range(len(seg))]
+
+    def joint_axes(self):
+        return [np.asarray(a, float) for seg in self.joints for (a, _, _) in seg]
+
+
+@dataclass
+class RearSegment:
+    """Stage 2 DC spine: the rear body (hips, hind legs, tail) hangs on an actuated spine joint behind the chest.
+    joints: (name suffix, axis, stiffness Nm/rad, springref deg, range deg); geoms: (from, to, radius, mass), body frame."""
+    name: str
+    point: tuple
+    joints: list
+    geoms: list
+    legs: list
+    kp: float
+    max_torque: float
+    action_scale: float
+    bone: str = "spine_rear"
+    damping: float = 20.0
+
+    def joint_names(self):
+        return [f"{self.name}_{j[0]}" for j in self.joints]
+
+    def joint_axes(self):
+        return [np.asarray(j[1], float) for j in self.joints]
 
 
 @dataclass
@@ -55,10 +86,38 @@ class BodySpec:
     action_scale: float = 0.6   # rad, action +-1 -> +-this around the rest pose
     stand_height: float = 0.0   # torso origin height when standing in the rest pose
     passive: list = field(default_factory=list)     # PassiveChain parts (stage 1 "alive" bodies)
+    rear: object = None                              # RearSegment (stage 2 DC spine)
+    head_body: str = ""                              # body whose steadiness is rewarded (stage 2)
 
     @property
     def joint_names(self):
-        return [n for leg in self.legs for n in leg.joint_names()]
+        """Actuated joints in actuator order: legs, spine, actuated chains (head, neck, abdomen)."""
+        names = [n for leg in self.legs for n in leg.joint_names()]
+        if self.rear is not None:
+            names += self.rear.joint_names()
+        return names + [n for ch in self.passive if ch.actuated for n in ch.joint_names()]
+
+    def actuator_params(self):
+        """Per actuated joint: (kp, max torque, action scale rad), same order as joint_names."""
+        out = [(self.kp, self.max_torque, self.action_scale) for leg in self.legs for _ in leg.joints]
+        if self.rear is not None:
+            out += [(self.rear.kp, self.rear.max_torque, self.rear.action_scale)] * len(self.rear.joints)
+        for ch in self.passive:
+            if ch.actuated:
+                out += [(ch.kp, ch.max_torque, ch.action_scale)] * len(ch.joint_names())
+        return out
+
+    def joint_axis(self, name):
+        for leg in self.legs:
+            for n, (_, axis, _) in zip(leg.joint_names(), leg.joints):
+                if n == name:
+                    return np.asarray(axis, float)
+        if self.rear is not None and name in self.rear.joint_names():
+            return self.rear.joint_axes()[self.rear.joint_names().index(name)]
+        for ch in self.passive:
+            if name in ch.joint_names():
+                return ch.joint_axes()[ch.joint_names().index(name)]
+        raise KeyError(name)
 
     @property
     def foot_names(self):
@@ -66,7 +125,8 @@ class BodySpec:
 
     @property
     def passive_joint_names(self):
-        return [n for ch in self.passive for n in ch.joint_names()]
+        """Spring joints without a motor (recorded and played back, not controlled)."""
+        return [n for ch in self.passive if not ch.actuated for n in ch.joint_names()]
 
 
 def _mirror(p):
@@ -95,8 +155,10 @@ _MYR_LEFT = {
 PITCH, YAW = np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
 
 
-def myrranox(passive=False):
-    """passive=True: abdomen and head hang on spring-damper joints and swing with the gait (stage 1)."""
+def myrranox(passive=False, active=False):
+    """passive=True: abdomen and head hang on spring-damper joints and swing with the gait (stage 1).
+    active=True (stage 2, walking v3): head and abdomen also get motors the brain controls; springs stay."""
+    passive = passive or active
     legs = []
     for pair, pts in _MYR_LEFT.items():
         for side, sgn in (("L", 1), ("R", -1)):
@@ -119,6 +181,9 @@ def myrranox(passive=False):
                          [[(PITCH, 12.0, MYR_SPRINGREF["head_p0x"]), (YAW, 6.0, 0.0)]],
                          masses=[1.0], radius=[0.05], bones=["head"], damping_ratio=0.25),
         ]
+        if active:
+            chains[0].actuated, chains[0].kp, chains[0].max_torque, chains[0].action_scale = True, 20.0, 8.0, 0.3
+            chains[1].actuated, chains[1].kp, chains[1].max_torque, chains[1].action_scale = True, 10.0, 4.0, 0.4
     else:
         torso += [
             '<geom name="head" type="ellipsoid" pos="0.60 0 0.15" size="0.1 0.08 0.06" mass="0.8"/>',
@@ -126,7 +191,8 @@ def myrranox(passive=False):
             '<geom name="abdomen" type="ellipsoid" pos="-0.27 0 0.18" size="0.40 0.16 0.11" mass="1.2"/>',
         ]
     return BodySpec("myrranox", mass=8.0, torso_geoms=torso, legs=legs,
-                    kp=60.0, max_torque=20.0, joint_damping=0.5, action_scale=0.6, stand_height=0.0, passive=chains)
+                    kp=60.0, max_torque=20.0, joint_damping=0.5, action_scale=0.6, stand_height=0.0, passive=chains,
+                    head_body="head_s0" if active else "")
 
 
 # ------------------------------------------------------------------------------------------------
@@ -139,9 +205,12 @@ _DC_LEFT = {
 }
 
 
-def dc(passive=False):
+def dc(passive=False, active=False):
     """passive=True: tail (2 segments), neck + head and the two extra arms on spring-damper joints (stage 1).
-    The chain points are the DC_rig bones tail_1/2, neck, head, arm_L/R, so the proxy mesh follows directly."""
+    The chain points are the DC_rig bones tail_1/2, neck, head, arm_L/R, so the proxy mesh follows directly.
+    active=True (stage 2, walking v3): a spine joint splits the chest - the rear body carries hind legs and tail -
+    and spine, neck and head get motors the brain controls; tail and arms stay passive."""
+    passive = passive or active
     legs = []
     for pair, pts in _DC_LEFT.items():
         for side, sgn in (("L", 1), ("R", -1)):
@@ -153,6 +222,8 @@ def dc(passive=False):
     torso = [
         '<geom name="chest" type="capsule" fromto="-0.25 0 0.66 0.50 0 0.74" size="0.21" mass="35"/>',
     ]
+    if active:
+        torso = ['<geom name="chest" type="capsule" fromto="0.12 0 0.70 0.50 0 0.74" size="0.21" mass="17.5"/>']
     chains = []
     if passive:
         chains = [
@@ -169,6 +240,10 @@ def dc(passive=False):
             chains.append(PassiveChain(f"arm_{side}", [(0.62, 0.20 * sgn, 0.62), (0.98, 0.22 * sgn, 0.24)],
                                        [[(PITCH, 10.0, DC_SPRINGREF["arm_L_p0x"]), (np.array([1.0, 0, 0]) * sgn, 6.0, 0.0)]],
                                        masses=[1.0], radius=[0.05], bones=[f"arm_{side}"], damping_ratio=0.25))
+        if active:
+            neck = chains[1]
+            neck.actuated, neck.kp, neck.max_torque, neck.action_scale = True, 300.0, 150.0, 0.3
+            chains[0].parent = "spine"                   # the tail hangs on the rear body
     else:
         torso += [
             '<geom name="arms" type="capsule" fromto="0.76 0 0.44 0.98 0 0.24" size="0.07" mass="2"/>',
@@ -177,13 +252,20 @@ def dc(passive=False):
             '<geom name="tail" type="capsule" fromto="-0.45 0 0.55 -1.30 0 0.44" size="0.06" mass="4"/>',
         ]
     return BodySpec("dc", mass=60.0, torso_geoms=torso, legs=legs,
-                    kp=300.0, max_torque=150.0, joint_damping=3.0, action_scale=0.6, stand_height=0.0, passive=chains)
+                    kp=300.0, max_torque=150.0, joint_damping=3.0, action_scale=0.6, stand_height=0.0, passive=chains,
+                    rear=RearSegment("spine", (0.12, 0, 0.70),
+                                     [("px", PITCH, 1500.0, DC_SPRINGREF.get("spine_px", 0.0), 20.0),
+                                      ("py", YAW, 800.0, 0.0, 20.0)],
+                                     [((0.0, 0, 0.0), (-0.37, 0, -0.04), 0.21, 17.5)],
+                                     ["hind_L", "hind_R"], kp=600.0, max_torque=400.0, action_scale=0.25)
+                    if active else None,
+                    head_body="neck_s1" if active else "")
 
 
 # Spring rest angles (deg) that cancel the sag under gravity, so the parts rest in the modelled pose.
 # Found with calibrate_springref() (python -m sim.bodies --springref).
 MYR_SPRINGREF = {"abdomen_p0x": 15.34, "head_p0x": -5.68}
-DC_SPRINGREF = {"tail_p0x": 16.85, "tail_p1x": 12.91, "neck_p0x": -5.5, "neck_p1x": -5.85, "arm_L_p0x": -9.19}
+DC_SPRINGREF = {"spine_px": -1.89, "tail_p0x": 16.85, "tail_p1x": 12.91, "neck_p0x": -5.5, "neck_p1x": -5.85, "arm_L_p0x": -9.19}
 
 BODIES = {"myrranox": myrranox, "dc": dc}
 
@@ -192,12 +274,13 @@ def _fmt(v):
     return " ".join(f"{x:.4f}" for x in v)
 
 
-def _passive_xml(ch):
-    """Nested bodies with spring-damper joints (no actuators). Damping from the damping ratio and a rough inertia."""
+def _passive_xml(ch, offset=(0.0, 0.0, 0.0)):
+    """Nested bodies with spring-damper joints (motors, if any, are added as actuators). Damping from the damping
+    ratio and a rough inertia. offset: position of the parent body's origin in the body frame."""
     xml, closes = "", ""
     pts = [np.asarray(p, dtype=float) for p in ch.points]
     for i, seg in enumerate(ch.joints):
-        origin = pts[i] - (pts[i - 1] if i else 0)
+        origin = pts[i] - (pts[i - 1] if i else np.asarray(offset, dtype=float))
         vec = pts[i + 1] - pts[i]
         length = float(np.linalg.norm(vec))
         mass_out = sum(ch.masses[i:])                       # this joint carries all segments beyond it
@@ -215,15 +298,23 @@ def _passive_xml(ch):
     return xml + closes
 
 
-def calibrate_springref(species):
-    """Settle the body with the rest pose held and read how far each passive joint sags; springref = -sag."""
+def calibrate_springref(species, active=False):
+    """Settle the body with the leg rest pose held and read how far each spring joint sags; springref = -sag.
+    Motors of spine/neck/head/abdomen are switched off, so the springs alone carry the weight."""
     import mujoco
-    spec = BODIES[species](passive=True)
+    spec = BODIES[species](passive=True, active=active)
     m = mujoco.MjModel.from_xml_string(build_mjcf(spec))
+    n_leg = sum(len(leg.joints) for leg in spec.legs)
+    m.actuator_gainprm[n_leg:, 0] = 0.0
+    m.actuator_biasprm[n_leg:, :] = 0.0
     d = mujoco.MjData(m)
     for _ in range(1500):
         mujoco.mj_step(m, d)
     out = {}
+    if spec.rear is not None:
+        name = f"{spec.rear.name}_px"
+        q = d.qpos[m.jnt_qposadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, name)]]
+        out[name] = round(-float(np.degrees(q)), 2)
     for ch in spec.passive:
         for i, seg in enumerate(ch.joints):
             if abs(seg[0][0][1]) > 0.5:                     # first joint of each segment is the pitch joint
@@ -243,41 +334,59 @@ def start_height(spec):
     return spec.stand_height - foot_bottom + 0.005
 
 
+def _leg_xml(leg, leg_mass, damp, offset=(0.0, 0.0, 0.0)):
+    """Nested leg bodies; each segment's body sits at its joint. offset: parent body origin in the body frame."""
+    p = leg.points
+    xml, closes = "", ""
+    for i in range(3):
+        origin = p[i] - (p[i - 1] if i else np.asarray(offset, dtype=float))
+        seg_from, seg_to = np.zeros(3), p[i + 1] - p[i]
+        joints = "".join(f'<joint name="{leg.name}_j{k}" axis="{_fmt(axis)}" range="{lo} {hi}" {damp}/>'
+                         for k, (seg, axis, (lo, hi)) in enumerate(leg.joints) if seg == i)
+        xml += (f'<body name="{leg.name}_s{i}" pos="{_fmt(origin)}">{joints}'
+                f'<geom type="capsule" fromto="{_fmt(seg_from)} {_fmt(seg_to)}" size="{leg.radius}" '
+                f'mass="{leg_mass:.4f}" class="creature"/>')
+        closes += "</body>"
+    foot = p[3] - p[2]
+    xml += (f'<geom name="{leg.name}_foot" type="sphere" pos="{_fmt(foot)}" size="{leg.radius * 1.2:.4f}" '
+            f'mass="{leg_mass * 0.2:.4f}" friction="1.2 0.02 0.001" class="creature"/>'
+            f'<site name="{leg.name}_foot" pos="{_fmt(foot)}" size="0.01"/>')
+    return xml + closes
+
+
+def _rear_xml(spec, leg_mass, damp):
+    """Stage 2 spine: rear body on the spine joint with its geometry, the hind legs and the chains hanging on it."""
+    r = spec.rear
+    pt = np.asarray(r.point, dtype=float)
+    joints = "".join(f'<joint name="{r.name}_{sfx}" axis="{_fmt(axis)}" stiffness="{stiff}" springref="{ref}" '
+                     f'damping="{r.damping}" armature="0.02" limited="true" range="{-rng} {rng}"/>'
+                     for sfx, axis, stiff, ref, rng in r.joints)
+    geoms = "".join(f'<geom type="capsule" fromto="{_fmt(a)} {_fmt(b)}" size="{rad}" mass="{mass}" class="creature"/>'
+                    for a, b, rad, mass in r.geoms)
+    legs = "".join(_leg_xml(leg, leg_mass, damp, pt) for leg in spec.legs if leg.name in r.legs)
+    chains = "".join(_passive_xml(ch, pt) for ch in spec.passive if ch.parent == r.name)
+    return f'<body name="{r.name}_rear" pos="{_fmt(pt)}">{joints}{geoms}{legs}{chains}</body>'
+
+
 def creature_xml(spec: BodySpec, prefix="", pos=(0.0, 0.0), yaw=0.0, leg_mass_fraction=0.25):
     """(body XML, actuator XML) for one creature. All names get `prefix`, so several creatures fit in one world.
     The creature's own defaults (joint damping, collision classes) are set on its elements."""
     leg_mass = spec.mass * leg_mass_fraction / len(spec.legs) / 3
     damp = f'damping="{spec.joint_damping}" armature="0.01" limited="true"'
-    legs_xml = []
-    for leg in spec.legs:
-        p = leg.points
-        # Nested bodies: each segment's body sits at its joint; geometry uses the measured points.
-        xml = ""
-        closes = ""
-        for i in range(3):
-            origin = p[i] - (p[i - 1] if i else 0)
-            seg_from, seg_to = np.zeros(3), p[i + 1] - p[i]
-            joints = "".join(f'<joint name="{leg.name}_j{k}" axis="{_fmt(axis)}" range="{lo} {hi}" {damp}/>'
-                             for k, (seg, axis, (lo, hi)) in enumerate(leg.joints) if seg == i)
-            xml += (f'<body name="{leg.name}_s{i}" pos="{_fmt(origin)}">{joints}'
-                    f'<geom type="capsule" fromto="{_fmt(seg_from)} {_fmt(seg_to)}" size="{leg.radius}" '
-                    f'mass="{leg_mass:.4f}" class="creature"/>')
-            closes += "</body>"
-        foot = p[3] - p[2]
-        xml += (f'<geom name="{leg.name}_foot" type="sphere" pos="{_fmt(foot)}" size="{leg.radius * 1.2:.4f}" '
-                f'mass="{leg_mass * 0.2:.4f}" friction="1.2 0.02 0.001" class="creature"/>'
-                f'<site name="{leg.name}_foot" pos="{_fmt(foot)}" size="0.01"/>')
-        legs_xml.append(xml + closes)
+    rear_legs = set(spec.rear.legs) if spec.rear is not None else set()
+    legs_xml = [_leg_xml(leg, leg_mass, damp) for leg in spec.legs if leg.name not in rear_legs]
 
     torso = [g.replace("<geom ", '<geom class="creature" ') for g in spec.torso_geoms]
-    torso += [_passive_xml(ch) for ch in spec.passive]
+    torso += [_passive_xml(ch) for ch in spec.passive if ch.parent == "torso"]
+    if spec.rear is not None:
+        torso.append(_rear_xml(spec, leg_mass, damp))
     quat = f"{np.cos(yaw / 2):.6f} 0 0 {np.sin(yaw / 2):.6f}"
     body = (f'<body name="torso" pos="{pos[0]:.4f} {pos[1]:.4f} {start_height(spec):.4f}" quat="{quat}">'
             f'<freejoint name="root"/><site name="torso_site" pos="0 0 0" size="0.01"/>'
             f'{"".join(torso)}{"".join(legs_xml)}</body>')
     actuators = "".join(
-        f'<position name="{prefix}{j}" joint="{prefix}{j}" kp="{spec.kp}" '
-        f'forcerange="{-spec.max_torque} {spec.max_torque}"/>' for j in spec.joint_names)
+        f'<position name="{prefix}{j}" joint="{prefix}{j}" kp="{kp}" forcerange="{-tq} {tq}"/>'
+        for j, (kp, tq, _) in zip(spec.joint_names, spec.actuator_params()))
     return _prefix_names(body, prefix), actuators
 
 

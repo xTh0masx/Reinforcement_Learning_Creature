@@ -28,6 +28,14 @@ def mirrored_copy(a, b):
     vb[0:3] = [va[0], -va[1], va[2]]
     vb[3:6] = [-va[3], va[4], -va[5]]
     vb[a.joint_qvel] = js * va[a.joint_qvel][jp]
+    names = a.body.passive_joint_names                       # spring-only parts (tail, arms) - version 3
+    if names:
+        import mujoco as mj
+        pp, ps = joint_mirror(a.body, names)
+        jid = [mj.mj_name2id(a.model, mj.mjtObj.mjOBJ_JOINT, n) for n in names]
+        qa_idx, va_idx = a.model.jnt_qposadr[jid], a.model.jnt_dofadr[jid]
+        qb[qa_idx] = ps * qa[qa_idx][pp]
+        vb[va_idx] = ps * va[va_idx][pp]
     b.data.qpos[:], b.data.qvel[:] = qb, vb
     b.data.ctrl[:] = js * a.data.ctrl[jp]
     b.data.act[:] = a.data.act
@@ -46,8 +54,8 @@ def mirrored_copy(a, b):
     b.t = a.t
 
 
-def test_mirror_simulation(species, steps=15):
-    a, b = LocomotionEnv(species, version=2), LocomotionEnv(species, version=2)
+def test_mirror_simulation(species, steps=15, version=2):
+    a, b = LocomotionEnv(species, version=version), LocomotionEnv(species, version=version)
     maps = mirror_maps(a)
     a.reset(seed=3, options={"command": (a.species.walk_speed, 0.5 * a.species.max_turn_rate)})
     b.reset(seed=3)
@@ -60,7 +68,7 @@ def test_mirror_simulation(species, steps=15):
         ob, rb, *_ = b.step(mirror(act, maps[2], maps[3]))
         worst_obs = max(worst_obs, float(np.max(np.abs(ob - mirror(oa, maps[0], maps[1])))))
         worst_rew = max(worst_rew, abs(ra - rb))
-    print(f"  {species}: mirrored simulation max |obs diff| {worst_obs:.2e}, max |reward diff| {worst_rew:.2e}")
+    print(f"  {species} v{version}: mirrored simulation max |obs diff| {worst_obs:.2e}, max |reward diff| {worst_rew:.2e}")
     assert worst_obs < 1e-3 and worst_rew < 1e-3, "mirror maps or body are not symmetric"
 
 
@@ -117,7 +125,8 @@ def gait_score(species, policy, seconds=6.0):
 if __name__ == "__main__":
     print("1. mirror symmetry")
     for sp in ("myrranox", "dc"):
-        test_mirror_simulation(sp)
+        for version in (2, 3):
+            test_mirror_simulation(sp, version=version)
     print("2. gait reward (1 = perfect gait, 0 = standing still or random)")
     rng = np.random.default_rng(0)
     for sp in ("myrranox", "dc"):

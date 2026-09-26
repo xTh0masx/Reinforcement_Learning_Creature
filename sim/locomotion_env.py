@@ -10,6 +10,8 @@ version=2  natural gait: a gait clock per leg is added to the observation and th
            for following the species' gait (sim/gaits.py: insect tripod / quadruped walk -> trot),
            lifting swinging feet, proper step length in the air, low energy and smooth joints.
            Trained with the mirror-symmetry loss (sim/symmetry.py). More turn / backwards commands.
+version=3  "alive" bodies (stage 2): as version 2, plus spring body parts (tail, arms) and actuated spine / neck /
+           head / abdomen (sim/bodies.py active=True); rewards a steady, level head (the "panther gaze").
 
 Shared world: pass model/data/prefix to drive one creature inside a bigger MuJoCo world
 (sim/physics_world.py). Then call apply_action(), step the world, and after_physics() - step() does
@@ -42,6 +44,9 @@ WEIGHTS = {
             energy=-0.1,        # mechanical power |torque * joint speed| / (m g v_walk)
             joint_acc=-0.05),   # mean (joint acceleration / 500 rad/s^2)^2
 }
+WEIGHTS[3] = dict(WEIGHTS[2],
+                  head_steady=-0.05,    # |head angular velocity - commanded turn|^2 (rad/s): a calm head
+                  head_level=-2.0)      # 1 - cos(head tilt): keep the gaze level
 TASK_TERMS = ("lin", "ang", "gait", "clearance", "air_time")
 
 
@@ -53,7 +58,10 @@ class LocomotionEnv(gym.Env):
                  model=None, data=None, prefix="", passive=False):
         self.species_name = species
         self.species = SPECIES[species]
-        self.body = BODIES[species](passive=passive)       # passive=True: tail/abdomen/head/arms on springs
+        if version >= 3:
+            self.body = BODIES[species](passive=True, active=True)
+        else:
+            self.body = BODIES[species](passive=passive)   # passive=True: tail/abdomen/head/arms on springs
         self.version = version
         self.w = WEIGHTS[version]
         self.shared = model is not None
@@ -88,7 +96,12 @@ class LocomotionEnv(gym.Env):
         self.foot_radius = m.geom_size[self.foot_geoms, 0]
         self.floor_geom = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "floor")
         self.torso_body = nid(mujoco.mjtObj.mjOBJ_BODY, "torso")
-        self.torso_geoms = set(np.flatnonzero(m.geom_bodyid == self.torso_body).tolist())
+        trunk = [self.torso_body]
+        if self.body.rear is not None:
+            trunk.append(nid(mujoco.mjtObj.mjOBJ_BODY, f"{self.body.rear.name}_rear"))
+        self.torso_geoms = set(np.flatnonzero(np.isin(m.geom_bodyid, trunk)).tolist())
+        self.head_body = nid(mujoco.mjtObj.mjOBJ_BODY, self.body.head_body) if self.body.head_body else None
+        self.action_scales = np.array([sc for _, _, sc in self.body.actuator_params()])
         self.passive_qpos = np.array([m.jnt_qposadr[nid(mujoco.mjtObj.mjOBJ_JOINT, n)]
                                       for n in self.body.passive_joint_names], dtype=int)
 
@@ -193,7 +206,7 @@ class LocomotionEnv(gym.Env):
     def apply_action(self, action):
         """Set this creature's joint targets; returns the clipped action (pass it to after_physics)."""
         a = np.clip(np.asarray(action, dtype=float), -1.0, 1.0)
-        self.data.ctrl[self.act_ids] = np.clip(self.rest_joints + a * self.body.action_scale,
+        self.data.ctrl[self.act_ids] = np.clip(self.rest_joints + a * self.action_scales,
                                                self.joint_lo, self.joint_hi)
         return a
 
@@ -278,6 +291,11 @@ class LocomotionEnv(gym.Env):
             terms["joint_acc"] = w["joint_acc"] * float(np.mean((qacc / 500.0) ** 2))
             if not standing:
                 self.phase = (self.phase + f * CONTROL_DT) % 1.0
+            if self.version >= 3 and self.head_body is not None:
+                w_head = d.cvel[self.head_body][:3]                  # world-frame angular velocity of the head
+                w_err = w_head - np.array([0.0, 0.0, self.command[1]])
+                terms["head_steady"] = w["head_steady"] * float(w_err @ w_err)
+                terms["head_level"] = w["head_level"] * (1.0 - float(d.xmat[self.head_body].reshape(3, 3)[2, 2]))
 
         reward = sum(v for k, v in terms.items() if k in TASK_TERMS) + self.penalty_scale * float(
             sum(v for k, v in terms.items() if k not in TASK_TERMS))

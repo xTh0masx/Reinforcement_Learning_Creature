@@ -36,7 +36,7 @@ def vecnormalize_path(path):
 
 def brain_version(model, species):
     """Which LocomotionEnv version a trained brain expects, from its observation size."""
-    for v in (1, 2):
+    for v in (1, 2, 3):
         if LocomotionEnv(species, version=v).observation_space.shape == model.observation_space.shape:
             return v
     raise ValueError(f"no LocomotionEnv version matches observation shape {model.observation_space.shape}")

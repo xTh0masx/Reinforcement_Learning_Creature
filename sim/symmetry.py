@@ -21,17 +21,22 @@ def _other_side(name):
     return name[:-1] + ("R" if name.endswith("L") else "L")
 
 
-def joint_mirror(body):
-    """(perm, sign) with mirrored_joints = sign * joints[perm], in actuator order."""
-    names = body.joint_names
-    axes = {}
-    for leg in body.legs:
-        for k, (_, axis, _) in enumerate(leg.joints):
-            axes[f"{leg.name}_j{k}"] = np.asarray(axis, dtype=float) / np.linalg.norm(axis)
+def _partner(name):
+    """Mirror partner of a joint: legs / arms swap side (front_L_j1 <-> front_R_j1), midline joints map to themselves."""
+    for a, b in (("_L_", "_R_"), ("_R_", "_L_")):
+        if a in name:
+            return name.replace(a, b)
+    return name
+
+
+def joint_mirror(body, names=None):
+    """(perm, sign) with mirrored_joints = sign * joints[perm] for the given joints (default: actuated, in actuator
+    order). Works for legs, spine, neck, head, abdomen and passive parts alike."""
+    names = list(names or body.joint_names)
+    axes = {n: body.joint_axis(n) / np.linalg.norm(body.joint_axis(n)) for n in names}
     perm, sign = [], []
     for n in names:
-        leg, k = n.rsplit("_j", 1)
-        src = f"{_other_side(leg)}_j{k}"
+        src = _partner(n)
         s = -float(np.dot(M @ axes[src], axes[n]))
         assert abs(abs(s) - 1) < 1e-6, f"{n}: mirrored axis does not match ({s})"
         perm.append(names.index(src))
