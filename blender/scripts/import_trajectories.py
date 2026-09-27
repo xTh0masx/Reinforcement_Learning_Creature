@@ -282,9 +282,43 @@ def _smooth(values, tau_s, dt):
     return v
 
 
-def _side_camera(col, cid, species_name, frames, t, x, y, heading):
-    """Steady camera beside the creature (its left side), following position and heading smoothly.
-    Also a focus empty on the body for the "follow + free orbit" viewport mode."""
+def _occlusion_offsets(t, rx, ry, hs, dist, obstacles, bounds, hold_s=3.0, turn_s=1.5, look_s=1.5):
+    """Extra camera orbit angle per sample: 0 = creature's left side, pi = right side. The camera changes side when a
+    rock (or the wall) would block the view within the next look_s seconds and the other side is free; it orbits
+    around smoothly over turn_s and stays at least hold_s on a side."""
+    n = len(t)
+    dt = float(t[1] - t[0]) if n > 1 else 0.1
+
+    def blocked(side):
+        cx, cy = rx - side * dist * np.sin(hs), ry + side * dist * np.cos(hs)
+        out = (cx < bounds[0] + 0.5) | (cx > bounds[1] - 0.5) | (cy < bounds[2] + 0.5) | (cy > bounds[3] - 0.5)
+        dx, dy = rx - cx, ry - cy
+        L2 = np.maximum(dx * dx + dy * dy, 1e-9)
+        for ox, oy, r in obstacles:
+            u = np.clip(((ox - cx) * dx + (oy - cy) * dy) / L2, 0, 1)
+            out |= np.hypot(cx + u * dx - ox, cy + u * dy - oy) < r + 0.3
+        look = max(int(look_s / dt), 1)
+        ahead = np.array([out[i:i + look].any() for i in range(n)])
+        return ahead
+
+    b = {1: blocked(1), -1: blocked(-1)}
+    side, last, target = 1, -1e9, np.zeros(n)
+    switches = 0
+    for i in range(n):
+        if b[side][i] and not b[-side][i] and t[i] - last >= hold_s:
+            side, last = -side, t[i]
+            switches += 1
+        target[i] = 0.0 if side == 1 else np.pi
+    # smooth orbit: rate-limit the angle change to pi per turn_s
+    off, rate = np.zeros(n), np.pi / turn_s * dt
+    for i in range(1, n):
+        off[i] = off[i - 1] + np.clip(target[i] - off[i - 1], -rate, rate)
+    return off, switches
+
+
+def _side_camera(col, cid, species_name, frames, t, x, y, heading, obstacles=(), bounds=(-1e9, 1e9, -1e9, 1e9)):
+    """Steady camera beside the creature, following position and heading smoothly; it orbits to the other side when a
+    rock or the wall would block the view. Also a focus empty on the body for the "follow + free orbit" mode."""
     dist, height, lens, body_z = SIDE_VIEW.get(species_name, (5.0, 1.0, 35, 0.5))
     dt = float(t[1] - t[0]) if len(t) > 1 else 0.1
 
@@ -301,10 +335,14 @@ def _side_camera(col, cid, species_name, frames, t, x, y, heading):
     rig = _link(col, bpy.data.objects.new(f"SideRig_{cid}", None))
     rig.rotation_mode = "XYZ"
     fcs = _fcurves(rig)
-    _key(fcs, "location", 0, frames, _smooth(x, POS_SMOOTH_S, dt))
-    _key(fcs, "location", 1, frames, _smooth(y, POS_SMOOTH_S, dt))
+    rx, ry = _smooth(x, POS_SMOOTH_S, dt), _smooth(y, POS_SMOOTH_S, dt)
+    hs = _smooth(np.unwrap(np.asarray(heading)), HEADING_SMOOTH_S, dt)
+    off, switches = _occlusion_offsets(np.asarray(t), rx, ry, hs, dist, obstacles, bounds)
+    print(f"  {cid}: side camera changes side {switches} times to keep rocks out of view")
+    _key(fcs, "location", 0, frames, rx)
+    _key(fcs, "location", 1, frames, ry)
     _key(fcs, "location", 2, frames, np.zeros(len(t)))
-    _key(fcs, "rotation_euler", 2, frames, _smooth(np.unwrap(np.asarray(heading)), HEADING_SMOOTH_S, dt))
+    _key(fcs, "rotation_euler", 2, frames, hs + off)
 
     cam = _link(col, bpy.data.objects.new(f"SideCam_{cid}", bpy.data.cameras.new(f"SideCam_{cid}")))
     cam.data.lens = lens
@@ -360,6 +398,16 @@ def import_csv(path):
         mat.diffuse_color = (0.75, 0.15, 0.12, 1)
         prey_mesh.materials.append(mat)
 
+    # rocks and walls for the side cameras' occlusion check (<repo>/recordings/x.csv -> <repo>/sim/habitat.json)
+    import json
+    hab_path = os.path.join(os.path.dirname(os.path.dirname(path)), "sim", "habitat.json")
+    obstacles, bounds = [], (-1e9, 1e9, -1e9, 1e9)
+    if os.path.exists(hab_path):
+        hab = json.load(open(hab_path, encoding="utf-8"))
+        obstacles = [(o["center"][0], o["center"][1], o["radius"]) for o in hab["obstacles"]]
+        b = hab["boundary"]
+        bounds = (b["xmin"], b["xmax"], b["ymin"], b["ymax"])
+
     last_frame, cameras = 1, []
     for cid, tr in tracks.items():
         t = np.asarray(tr["time"])
@@ -400,7 +448,7 @@ def import_csv(path):
             model = _attach_asset(root, species[cid])
         if model is None:
             _placeholder(col, f"{cid}_body", ASSETS.get(species[cid], {}).get("size", 1.0)).parent = root
-        cameras.append(_side_camera(col, cid, species[cid], frames, t, x, y, tr["heading"]))
+        cameras.append(_side_camera(col, cid, species[cid], frames, t, x, y, tr["heading"], obstacles, bounds))
         if tr.get("hunger"):
             _hud(col, cameras[-1], cid, species[cid], frames, tr)
 
