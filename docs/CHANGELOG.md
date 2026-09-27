@@ -7,6 +7,14 @@ time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
 ## 26 Sep 2026
 
+**27 Sep – Myrranox v3 attempts, showcase with the alive DC** (owner decisions A, then C + A2)
+- `myr_legs_v3b` (resume, 10× weaker head penalty) and `myr_legs_v3c` (resume, penalty frozen at 0.6): both failed –
+  the Myrranox drifts into standing still after ~1M steps. It stays on walking v2 + passive parts.
+- Showcase re-recorded: DC walking v3 (spine, steady head, livelier tail) + Myrranox v2 + passive parts; preview
+  `docs/videos/alive_stage2_preview.mp4`. `train_locomotion.py`: `--resume` checkpoints, `--curriculum-total`,
+  `--penalty-fixed`, `--head-weight`; `record_world.py --walk-myr/--walk-dc`.
+- Known: the side camera can end up behind a rock (no occlusion avoidance yet).
+
 **Stage 2 results:** DC `models/dc_legs_v3` released (faster, spine used, head −41 % wobble, tail swings more);
 Myrranox v3 failed (learned to stand still once the head penalty ramped up) – stays on v2 + passive parts.
 Videos: `docs/videos/*_legs_v3_training.mp4`, `*_legs_v2_vs_v3.mp4`; figures `docs/figures/locomotion/*_legs_v3/`,

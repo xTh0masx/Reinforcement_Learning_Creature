@@ -30,6 +30,7 @@ speed/turn commands every 2–5 s, 15 % standing), PPO with 8 parallel environme
 
 | 8 | 26 Sep 2026 | `myr_legs_v3` | Myrranox | 4M | **"Alive" body, stage 2:** head (2) and abdomen (2) get motors (their springs from stage 1 stay and carry the weight) → 22 actuators; new rewards: head steadiness (head rotation not explained by the commanded turn) and a level head; mirror symmetry over all joints | **Failed:** walked at 0.5–0.75M (0.5–0.6 m/s), then **learned to stand still** from 1.25M (0.00 m/s at every command) – once the penalty curriculum made the head-steadiness penalty strong, every step bounced the light head and standing was cheaper (same trap as pilot 2). Not released. |
 | 8b | 27 Sep 2026 | `myr_legs_v3b` | Myrranox | 0.75M → 2.33M (stopped) | Continued #8 from its 0.75M checkpoint (still walking) with a **10× weaker head penalty**; penalty ramp continued as in #8 (`--curriculum-total 4e6`) | **Failed again:** collapsed at 1.25M (0.02 m/s) and stayed still at 1.75M / 2.25M. The standing brain tilts its body ~24° with joints at their limits, although walking would still earn ~35 % more reward – a training trap, not the head penalty. |
+| 8c | 27 Sep 2026 | `myr_legs_v3c` | Myrranox | 0.75M → 2.07M (stopped) | A2: continued #8 from 0.75M with the **penalty scale frozen at 0.6** (the level at which it still walked), original head weight | **Failed, slower:** 1.5M walks at 0.25 of 0.6 m/s and veers off (−68 °/s at full speed), 2.0M 0.08 m/s. |
 | 9 | 26 Sep 2026 | `dc_legs_v3` | DC | 4M | **Stage 2:** spine joint (bend + sideways) splits the chest – the rear body carries hind legs and tail; neck (2) and head (1) get motors; tail and extra arms stay passive (stage 1) → 21 actuators; same rewards as #8 | **Success – released.** Walk 0.83 / 0.8 m/s, trot 2.69 / 2.5 m/s (v2: 0.68 / 2.15 – the spine helps), turns ±21 of ±36 °/s, no falls. Head wobble 0.69 rad/s (v2 + passive parts: 1.17, −41 %), spine ±3.2° sideways / ±1.3° up-down, tail tip ±15.5° (v2: ±10.6°), asymmetry 1.9–3.4°. Power higher (947 W vs 656 W). |
 
 Reward values are **not comparable between sessions** — the reward definition changed each time.
@@ -85,9 +86,10 @@ Owner request: the whole body should move – Myrranox like an ant, DC like a pa
 
 **Stage 2 result:** the DC walks faster, uses its spine, holds its head steadier and swings its tail more
 (`docs/videos/dc_legs_v2_vs_v3.mp4`, `docs/videos/dc_legs_v3_training.mp4`, `docs/evaluations/alive_dc.json`).
-The Myrranox v3 failed (stands still; `docs/videos/myr_legs_v3_training.mp4`, `myr_legs_v2_vs_v3.mp4`) – it keeps
-walking v2 with the stage-1 passive parts until a fix (weaker head penalty for the light head, or continue from
-the 0.75M checkpoint where it still walked).
+The Myrranox v3 failed three times (#8 stands still; #8b weaker head penalty; #8c penalty frozen) – every run walks
+until about 1M steps and then drifts into standing still. **Owner decision (27 Sep, option C):** the Myrranox keeps
+walking v2 with the stage-1 passive parts; the showcase uses DC v3 + Myrranox v2 (`docs/videos/alive_stage2_preview.mp4`).
+Untested idea: smaller movement ranges for the new Myrranox head/abdomen joints (A3).
 
 ## Lessons
 
