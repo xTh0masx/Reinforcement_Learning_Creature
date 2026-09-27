@@ -23,13 +23,13 @@ class PenaltyCurriculum(BaseCallback):
     """Scale the smoothness/effort penalties from `start` to 1 over the first `ramp` fraction of training,
     so the brain first discovers walking and then learns to walk cleanly."""
 
-    def __init__(self, total, start=0.2, ramp=0.4):
+    def __init__(self, total, start=0.2, ramp=0.4, fixed=None):
         super().__init__()
-        self.total, self.start, self.ramp = total, start, ramp
+        self.total, self.start, self.ramp, self.fixed = total, start, ramp, fixed
 
     def _on_rollout_start(self):
         frac = min(1.0, self.num_timesteps / (self.ramp * self.total))
-        scale = self.start + (1 - self.start) * frac
+        scale = self.fixed if self.fixed is not None else self.start + (1 - self.start) * frac
         self.training_env.env_method("set_penalty_scale", scale)
         self.logger.record("train/penalty_scale", scale)
 
@@ -50,6 +50,8 @@ def main():
     p.add_argument("--sym-weight", type=float, default=1.0, help="mirror-symmetry loss weight (version 2)")
     p.add_argument("--head-weight", type=float, default=1.0,
                    help="scale of the version-3 head steadiness/level penalties (0.1 = ten times weaker)")
+    p.add_argument("--penalty-fixed", type=float, default=None,
+                   help="hold the penalty scale at this value instead of ramping it (e.g. 0.6)")
     p.add_argument("--curriculum-total", type=float, default=None,
                    help="length the penalty curriculum refers to (default --steps; set to the original run's length "
                         "when resuming so the ramp continues where it was)")
@@ -86,7 +88,7 @@ def main():
         env.save(f"checkpoints/{run}_vecnormalize_0_steps.pkl")
     ckpt = CheckpointCallback(max(int(args.ckpt_every) // args.envs, 1), "checkpoints/", name_prefix=run,
                               save_vecnormalize=True)
-    callbacks = CallbackList([ckpt, PenaltyCurriculum(int(args.curriculum_total or args.steps))])
+    callbacks = CallbackList([ckpt, PenaltyCurriculum(int(args.curriculum_total or args.steps), fixed=args.penalty_fixed)])
     model.learn(total_timesteps=int(args.steps), tb_log_name=run, callback=callbacks,
                 reset_num_timesteps=not args.resume)
     model.save(f"models/{run}")

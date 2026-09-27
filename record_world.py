@@ -20,7 +20,8 @@ from sim.nav_brain import NavBrain
 from sim.physics_world import PhysicsWorld
 
 PREDATORS = {"myrranox": "models/myr_brain_v3_r1", "dc": "models/dc_brain_v4_r1"}
-WALKERS = {"myrranox": "models/myr_legs_v2", "dc": "models/dc_legs_v2"}
+# Walking brains: DC v3 = "alive" body (spine / neck / head controlled); Myrranox v2 + passive parts (its v3 failed)
+WALKERS = {"myrranox": "models/myr_legs_v2", "dc": "models/dc_legs_v3"}
 
 
 def make_env(ego, other, seed):
@@ -47,8 +48,15 @@ def main():
     p.add_argument("--pick-seed", type=int, default=0, help="try this many seeds in 2D first, keep the best")
     p.add_argument("--out", default="recordings/showcase.csv")
     p.add_argument("--rigid", action="store_true", help="bodies without the spring tail/abdomen/head/arms (stage 1)")
+    p.add_argument("--walk-myr", default=None, help="walking brain for the Myrranox (default WALKERS)")
+    p.add_argument("--walk-dc", default=None, help="walking brain for the DC (default WALKERS)")
     args = p.parse_args()
     steps = int(args.minutes * 600)
+    if args.walk_myr:
+        WALKERS["myrranox"] = args.walk_myr
+    if args.walk_dc:
+        WALKERS["dc"] = args.walk_dc
+    print("walking brains:", WALKERS, flush=True)
     ego, other = "myrranox", "dc"
 
     seed = args.seed
