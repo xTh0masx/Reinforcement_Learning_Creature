@@ -80,9 +80,9 @@ python record_world.py --minutes 5 --pick-seed 8 --out recordings/showcase.csv
 In Blender import it (below), then use the sidebar panel **Creatures** (N key). Render the side-by-side video:
 
 ```bash
-blender -b blender/habitat_showcase.blend --python blender/scripts/render_camera.py -- --camera SideCam_myrranox_0 --out renders/showcase/myrranox
-blender -b blender/habitat_showcase.blend --python blender/scripts/render_camera.py -- --camera SideCam_dc_0 --out renders/showcase/dc
-python make_side_by_side.py
+blender -b blender/habitat_showcase.blend --python blender/scripts/render_camera.py -- --camera SideCam_myrranox_0 --out renders/showcase_v3/myrranox
+blender -b blender/habitat_showcase.blend --python blender/scripts/render_camera.py -- --camera SideCam_dc_0 --out renders/showcase_v3/dc
+python make_side_by_side.py --left renders/showcase_v3/myrranox --right renders/showcase_v3/dc --out docs/videos/showcase_side_by_side_v3.mp4
 ```
 
 ## Record and play back in Blender
@@ -142,7 +142,7 @@ Debug stand-ins (not RL): `record.py --policy heuristic` (scripted navigation, g
 | Walking brains | **v2 released** (`models/*_legs_v2`): insect tripod / quadruped walk→trot, symmetric, efficient, no falls |
 | Predator brains | **DC `models/dc_brain_v4_r1`** (4/5 section 12 checks); **Myrranox `models/myr_brain_v3_r1`** (hunts, but starves when its home is empty; fails with real legs) |
 | Blender | rigs, pose playback (0.01 mm), steady side cameras, overview, panel "Creatures", hunger/fatigue display |
-| Showcase | `docs/videos/showcase_side_by_side.mp4` (5:00, both creatures side by side) |
+| Showcase | `docs/videos/showcase_side_by_side_v3.mp4` (5:00, alive DC v3 + Myrranox v2; first version `showcase_side_by_side.mp4`) |
 | Open | raids/defence, Myrranox turning on the spot, 2+2 creatures, textures, paper/slides |
 
 What happened and all results: **[docs/RESULTS.md](docs/RESULTS.md)** · changes: [docs/CHANGELOG.md](docs/CHANGELOG.md) · time spent: [docs/TIME_LOG.md](docs/TIME_LOG.md) ·

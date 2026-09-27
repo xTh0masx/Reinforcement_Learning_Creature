@@ -39,6 +39,7 @@ The recorded body pose and joint angles are played back on the rigged models in 
 | 26 Sep | Blender: steady side cameras, overview, panel "Creatures", hunger/fatigue display (owner request) | Clear side view of the leg motion; free viewing of both creatures |
 | 26 Sep | Prey at half speed (owner decision); showcase re-recorded (5 min) | Myrranox catches prey and survives; DC catches 3 |
 | 26 Sep | Showcase rendered side by side (5:00) | `docs/videos/showcase_side_by_side.mp4` |
+| 27 Sep | Showcase v3: DC walking v3 (alive body) + Myrranox v2 + passive parts; side cameras dodge rocks | `docs/videos/showcase_side_by_side_v3.mp4` |
 
 ---
 
@@ -204,7 +205,11 @@ idle motion).
 
 The DC transferred the new control into faster, more fluid, steadier-headed walking. The Myrranox learned to stand
 still once the head-steadiness penalty ramped up (lesson 8 in the walking log); it keeps v2 + passive parts until
-a fix. Videos: `videos/dc_legs_v2_vs_v3.mp4`, `videos/*_legs_v3_training.mp4`.
+a fix (the retries v3b and v3c failed too, 27 Sep). Videos: `videos/dc_legs_v2_vs_v3.mp4`, `videos/*_legs_v3_training.mp4`.
+
+**Showcase v3 (27 Sep):** the 5-minute showcase re-recorded and rendered with the released DC v3 and Myrranox v2 +
+passive parts: `docs/videos/showcase_side_by_side_v3.mp4` (still `figures/showcase_side_by_side_v3.jpg`). The side cameras now orbit to the
+other side of the creature when a rock or the wall would block the view (DC: 3 side changes in 5 min).
 
 ## 7. Videos and graphs
 
@@ -221,7 +226,8 @@ a fix. Videos: `videos/dc_legs_v2_vs_v3.mp4`, `videos/*_legs_v3_training.mp4`.
 | `figures/gait/<run>_footfall_<speed>.png` | Footfall diagrams (dark = foot on the ground); v1 vs v2 is the clearest before/after slide |
 | `figures/gait/*_legs_v2_<N>_steps_footfall_*.png` | Gait during v2 training (1M, 1.5M, 2.75M, 3.5M) |
 | `figures/myr_legs_pilot2_1M.gif` | Pilot 2 standing still at 1M steps |
-| `videos/showcase_side_by_side.mp4` | **Showcase, 5:00**: Myrranox (left) and DC (right) living in the habitat, everything learned (predator + walking brains), steady side cameras with hunger/fatigue – rendered from `blender/habitat_showcase.blend` |
+| `videos/showcase_side_by_side.mp4` | **Showcase, 5:00**: Myrranox (left) and DC (right) living in the habitat, everything learned (predator + walking brains), steady side cameras with hunger/fatigue – rendered from `blender/habitat_showcase.blend` (DC walking v2) |
+| `videos/showcase_side_by_side_v3.mp4` | **Showcase v3, 5:00**: the same with the alive DC (walking v3) and Myrranox v2 + passive parts; cameras dodge rocks |
 | `videos/*_legs_v3_training.mp4`, `videos/*_legs_v2_vs_v3.mp4` | Walking v3 (alive body): whole training; stage 1 vs stage 2 side by side |
 | `videos/predator/<run>_training.mp4` | Every predator training run (8): one habitat day per checkpoint, untrained → 3M, next to the learning curve |
 | `evaluations/*.txt, *.json` | Section 12 checks of the predator brains and the scripted baseline |

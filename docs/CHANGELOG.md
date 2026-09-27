@@ -5,6 +5,16 @@ All changes and owner decisions, newest first. Commit hashes refer to branch `rl
 [predator_training_log.md](predator_training_log.md), [experiments.csv](experiments.csv),
 time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
+## 27 Sep 2026
+
+**Showcase v3 rendered** (`c40c6b2`, owner: "yes")
+- Side cameras avoid rocks: `import_trajectories.py` checks 1.5 s ahead whether a rock or the wall lies between the
+  side camera and the creature; if so and the other side is free, the camera orbits to the other side (1.5 s, stays
+  ≥ 3 s on a side). In the showcase: DC camera 3 side changes, Myrranox 0.
+- `docs/videos/showcase_side_by_side_v3.mp4`: 5:00, Myrranox walking v2 + passive parts (left), DC walking v3 alive body (right); 2 × 9001 frames,
+  render 14:35 → 18:54 (4.3 h). Still: `docs/figures/showcase_side_by_side_v3.jpg`. The first showcase
+  (`showcase_side_by_side.mp4`, DC v2) is kept for comparison.
+
 ## 26 Sep 2026
 
 **27 Sep – Myrranox v3 attempts, showcase with the alive DC** (owner decisions A, then C + A2)
@@ -13,7 +23,7 @@ time spent per step: [TIME_LOG.md](TIME_LOG.md).
 - Showcase re-recorded: DC walking v3 (spine, steady head, livelier tail) + Myrranox v2 + passive parts; preview
   `docs/videos/alive_stage2_preview.mp4`. `train_locomotion.py`: `--resume` checkpoints, `--curriculum-total`,
   `--penalty-fixed`, `--head-weight`; `record_world.py --walk-myr/--walk-dc`.
-- Known: the side camera can end up behind a rock (no occlusion avoidance yet).
+- Known: the side camera can end up behind a rock (fixed later the same day, see above).
 
 **Stage 2 results:** DC `models/dc_legs_v3` released (faster, spine used, head −41 % wobble, tail swings more);
 Myrranox v3 failed (learned to stand still once the head penalty ramped up) – stays on v2 + passive parts.

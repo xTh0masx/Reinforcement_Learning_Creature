@@ -60,6 +60,16 @@ walking (new phase 1b), the physics habitat, the predator rules, predator brains
 | 17:51 – 18:00 | 0.15 h | Side-by-side video assembled | `showcase_side_by_side.mp4` (5:00) |
 | 18:00 – ~18:30 | 0.5 h | Documentation: predator log, changelog, results, README, plan, this time log | commits `d3e40c5`, `60dee38` |
 
+## Session 4 – 27 Sep (excerpt)
+
+Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
+
+| Time | Duration | Step | Result |
+| --- | --- | --- | --- |
+| ~14:30 | 0.1 h | Side cameras dodge rocks, showcase re-imported, test still | `c40c6b2` |
+| 14:35 – 18:54 | **4.3 h compute** | Rendering both side cameras of showcase v3 (9001 frames each) | frames done |
+| 18:54 – 19:07 | 0.2 h | Side-by-side video assembled | `showcase_side_by_side_v3.mp4` (5:00) |
+
 ## Compute per training run
 
 | Run | Start → end | Wall time | Steps | Outcome |
@@ -74,6 +84,7 @@ walking (new phase 1b), the physics habitat, the predator rules, predator brains
 | *_brain_v3_r1 | 25.09 23:14 → 23:58, 26.09 08:05 → 08:50 | 1.5 h (+8 h idle) | 2 × 3M | hunts |
 | *_brain_v4_r1 | 26.09 09:59 → 11:14 | 1.26 h | 2 × 3M | DC released |
 | Showcase render | 26.09 12:09 → 17:51 | 5.7 h | 18 002 frames | video |
+| Showcase v3 render | 27.09 14:35 → 18:54 | 4.3 h | 18 002 frames | video |
 
 Speeds on this PC (8 CPU cores, no CUDA GPU): walking training ≈ 650–850 steps/s per run with two runs in parallel,
 predator training ≈ 550–650 steps/s per run, EEVEE render ≈ 0.8 frames/s for two cameras in parallel. Everything was
