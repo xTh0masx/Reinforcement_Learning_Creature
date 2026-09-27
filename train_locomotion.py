@@ -48,17 +48,25 @@ def main():
     p.add_argument("--ckpt-every", type=float, default=250_000)
     p.add_argument("--version", type=int, default=1, help="1 = original reward, 2 = natural gait + symmetry")
     p.add_argument("--sym-weight", type=float, default=1.0, help="mirror-symmetry loss weight (version 2)")
+    p.add_argument("--head-weight", type=float, default=1.0,
+                   help="scale of the version-3 head steadiness/level penalties (0.1 = ten times weaker)")
+    p.add_argument("--curriculum-total", type=float, default=None,
+                   help="length the penalty curriculum refers to (default --steps; set to the original run's length "
+                        "when resuming so the ramp continues where it was)")
     args = p.parse_args()
     run = args.run or f"{args.species}_legs_v1"
     torch.set_num_threads(2)
 
     env = make_vec_env(LocomotionEnv, n_envs=args.envs, seed=args.seed, vec_env_cls=SubprocVecEnv,
-                       env_kwargs={"species": args.species, "version": args.version})
+                       env_kwargs={"species": args.species, "version": args.version,
+                                   "head_weight": args.head_weight})
     algo = SymmetricPPO if args.version >= 2 else PPO
     algo_kwargs = {"sym_weight": args.sym_weight} if args.version >= 2 else {}
     if args.resume:
-        env = VecNormalize.load(f"{args.resume}_vecnormalize.pkl", env)
+        from play_locomotion import vecnormalize_path          # models/<run> or checkpoints/<run>_<N>_steps
+        env = VecNormalize.load(vecnormalize_path(args.resume), env)
         model = algo.load(args.resume, env=env, tensorboard_log="runs/")
+        print(f"resumed {args.resume} at {model.num_timesteps} steps", flush=True)
     else:
         env = VecNormalize(env, norm_obs=True, norm_reward=True, clip_obs=10.0, gamma=0.99)
         model = algo(
@@ -78,7 +86,7 @@ def main():
         env.save(f"checkpoints/{run}_vecnormalize_0_steps.pkl")
     ckpt = CheckpointCallback(max(int(args.ckpt_every) // args.envs, 1), "checkpoints/", name_prefix=run,
                               save_vecnormalize=True)
-    callbacks = CallbackList([ckpt, PenaltyCurriculum(int(args.steps))])
+    callbacks = CallbackList([ckpt, PenaltyCurriculum(int(args.curriculum_total or args.steps))])
     model.learn(total_timesteps=int(args.steps), tb_log_name=run, callback=callbacks,
                 reset_num_timesteps=not args.resume)
     model.save(f"models/{run}")

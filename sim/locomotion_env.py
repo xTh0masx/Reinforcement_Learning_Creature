@@ -55,7 +55,7 @@ class LocomotionEnv(gym.Env):
 
     def __init__(self, species="myrranox", episode_seconds=20.0, command_seconds=(2.0, 5.0),
                  stand_prob=0.15, render_mode=None, width=640, height=400, version=1,
-                 model=None, data=None, prefix="", passive=False):
+                 model=None, data=None, prefix="", passive=False, head_weight=1.0):
         self.species_name = species
         self.species = SPECIES[species]
         if version >= 3:
@@ -63,7 +63,10 @@ class LocomotionEnv(gym.Env):
         else:
             self.body = BODIES[species](passive=passive)   # passive=True: tail/abdomen/head/arms on springs
         self.version = version
-        self.w = WEIGHTS[version]
+        self.w = dict(WEIGHTS[version])
+        for k in ("head_steady", "head_level"):              # scale of the v3 head penalties (train_locomotion.py)
+            if k in self.w:
+                self.w[k] *= head_weight
         self.shared = model is not None
         self.prefix = prefix
         self.model = model if self.shared else mujoco.MjModel.from_xml_string(build_mjcf(self.body))
