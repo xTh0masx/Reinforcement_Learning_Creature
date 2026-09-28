@@ -21,7 +21,7 @@ from sim.physics_world import PhysicsWorld
 
 PREDATORS = {"myrranox": "models/myr_brain_v3_r1", "dc": "models/dc_brain_v4_r1"}
 # Walking brains: DC v3 = "alive" body (spine / neck / head controlled); Myrranox v2 + passive parts (its v3 failed)
-WALKERS = {"myrranox": "models/myr_legs_v2", "dc": "models/dc_legs_v3"}
+WALKERS = {"myrranox": "models/myr_legs_v4", "dc": "models/dc_legs_v4"}
 
 
 def make_env(ego, other, seed):

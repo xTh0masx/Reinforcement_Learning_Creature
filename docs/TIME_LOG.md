@@ -70,6 +70,17 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | 14:35 – 18:54 | **4.3 h compute** | Rendering both side cameras of showcase v3 (9001 frames each) | frames done |
 | 18:54 – 19:07 | 0.2 h | Side-by-side video assembled | `showcase_side_by_side_v3.mp4` (5:00) |
 
+## Session 5 – 28 Sep (walking v4)
+
+| Time | Duration | Step | Result |
+| --- | --- | --- | --- |
+| ~10:45 – 11:17 | 0.5 h | Plan, walking v4 implemented, old brains checked in the v4 setup, baseline measured | `88d54ec` |
+| 11:17 – 11:27 | 0.2 h compute | Pilot 0.5M each | passed |
+| 11:27 – 11:28 | – | Spot-turn reward fix | |
+| 11:28 – 12:34 | **1.1 h compute** | `myr_legs_v4`, `dc_legs_v4`, 3M each in parallel | released |
+| 12:34 – 12:50 | 0.3 h | Evaluation, checkpoint comparison, habitat test, videos and graphs | |
+| 12:50 – | 0.2 h | Documentation | |
+
 ## Compute per training run
 
 | Run | Start → end | Wall time | Steps | Outcome |
@@ -84,6 +95,8 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | *_brain_v3_r1 | 25.09 23:14 → 23:58, 26.09 08:05 → 08:50 | 1.5 h (+8 h idle) | 2 × 3M | hunts |
 | *_brain_v4_r1 | 26.09 09:59 → 11:14 | 1.26 h | 2 × 3M | DC released |
 | Showcase render | 26.09 12:09 → 17:51 | 5.7 h | 18 002 frames | video |
+| myr/dc_legs_v4_pilot | 28.09 11:17 → 11:27 | 0.2 h | 2 × 0.5M | passed |
+| myr/dc_legs_v4 | 28.09 11:28 → 12:34 | 1.1 h | 2 × 3M | released |
 | Showcase v3 render | 27.09 14:35 → 18:54 | 4.3 h | 18 002 frames | video |
 
 Speeds on this PC (8 CPU cores, no CUDA GPU): walking training ≈ 650–850 steps/s per run with two runs in parallel,

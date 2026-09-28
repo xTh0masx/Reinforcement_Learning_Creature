@@ -42,7 +42,7 @@ def font(size, bold=False):
 
 def reward_curve(run):
     from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
-    dirs = sorted(glob.glob(f"runs/{run}_*"))
+    dirs = sorted(d for d in glob.glob(f"runs/{run}_*") if d[len(f"runs/{run}_"):].isdigit())   # not <run>_pilot
     xs, ys = [], []
     for d in dirs:
         ea = EventAccumulator(d, size_guidance={"scalars": 0})
@@ -143,7 +143,9 @@ def main():
     writer = imageio.get_writer(out_path, fps=FPS, codec="libx264", quality=8, macro_block_size=16)
     title = card([f"{TITLE[args.species]} learns to walk",
                   "Reinforcement learning (PPO) in a MuJoCo physics body",
-                  f"run {args.run}  -  {len(cks)} checkpoints from untrained to {fmt_steps(total)}",
+                  f"run {args.run}  -  {len(cks)} checkpoints from "
+                  f"{'untrained' if cks[0][0] == 0 else 'the previous brain (' + fmt_steps(cks[0][0]) + ')'} "
+                  f"to {fmt_steps(total)}",
                   "each checkpoint: walk 4 s, full speed 4 s, walk + turn 4 s"], [52, 26, 22, 22])
     for _ in range(FPS * 4):
         writer.append_data(title)

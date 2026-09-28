@@ -5,6 +5,22 @@ All changes and owner decisions, newest first. Commit hashes refer to branch `rl
 [predator_training_log.md](predator_training_log.md), [experiments.csv](experiments.csv),
 time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
+## 28 Sep 2026
+
+**Walking v4 – precise and fluid** (`88d54ec`, owner request; both brains released)
+- `sim/locomotion_env.py` version 4: joint-target low-pass filter (`ACTION_FILTER` 0.5), tracking tolerance curriculum
+  (`set_track_scale`, `train_locomotion.py` `TrackingCurriculum`, `--track-end`), turn weight 1.5, soft-landing
+  penalty, ramped commands (`COMMAND_RAMP_S`), 20 % spot turns / 10 % backwards, head style scaled by tracking,
+  spot-turn speed reward scaled by the turn; body per species (`ACTIVE`, `body_for`).
+- Brain version stored in the brain (`loco_version`), because Myrranox v4 has the v2 observation size;
+  `PhysicsWorld` builds bodies via `body_for`.
+- `precision_metrics.py` (command tracking per segment), `alive_metrics.py` + joint acceleration / target jumps.
+- `train_locomotion.py --resume` saves the starting brain as the first checkpoint; progress tools ignore `<run>_pilot`.
+- Pilot 0.5M each (passed), then `models/myr_legs_v4`, `models/dc_legs_v4` (+3M each, 1.1 h). Myrranox turns on the
+  spot for the first time (58 of 72 °/s), DC turns ±30 of 36 °/s (was 21), both ~25 % smoother. `record_world.py`
+  walks with v4 by default. Videos: `docs/videos/*_legs_v4_training.mp4`, `myr_legs_v2_vs_v4.mp4`,
+  `dc_legs_v3_vs_v4.mp4`.
+
 ## 27 Sep 2026
 
 **Showcase v3 rendered** (`c40c6b2`, owner: "yes")

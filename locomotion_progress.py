@@ -45,8 +45,8 @@ RUN_NOTES = {
 def checkpoints(run):
     found = []
     for path in glob.glob(f"checkpoints/{run}_*_steps.zip"):
-        m = re.search(r"_(\d+)_steps\.zip$", path)
-        if m and "vecnormalize" not in path:
+        m = re.fullmatch(rf"{re.escape(run)}_(\d+)_steps\.zip", os.path.basename(path))   # not <run>_pilot_...
+        if m:
             found.append((int(m.group(1)), path[:-4]))
     found.sort()
     if os.path.exists(f"models/{run}.zip"):

@@ -33,6 +33,8 @@ speed/turn commands every 2–5 s, 15 % standing), PPO with 8 parallel environme
 | 8c | 27 Sep 2026 | `myr_legs_v3c` | Myrranox | 0.75M → 2.07M (stopped) | A2: continued #8 from 0.75M with the **penalty scale frozen at 0.6** (the level at which it still walked), original head weight | **Failed, slower:** 1.5M walks at 0.25 of 0.6 m/s and veers off (−68 °/s at full speed), 2.0M 0.08 m/s. |
 | 9 | 26 Sep 2026 | `dc_legs_v3` | DC | 4M | **Stage 2:** spine joint (bend + sideways) splits the chest – the rear body carries hind legs and tail; neck (2) and head (1) get motors; tail and extra arms stay passive (stage 1) → 21 actuators; same rewards as #8 | **Success – released.** Walk 0.83 / 0.8 m/s, trot 2.69 / 2.5 m/s (v2: 0.68 / 2.15 – the spine helps), turns ±21 of ±36 °/s, no falls. Head wobble 0.69 rad/s (v2 + passive parts: 1.17, −41 %), spine ±3.2° sideways / ±1.3° up-down, tail tip ±15.5° (v2: ±10.6°), asymmetry 1.9–3.4°. Power higher (947 W vs 656 W). |
 | 10 | 28 Sep 2026 | `myr_legs_v4_pilot`, `dc_legs_v4_pilot` | both | 4M → 4.5M (pilot) | **Precise + fluid (v4)**, continued from Myrranox v2 / DC v3: joint targets low-pass filtered (0.5 per 20 ms), tracking tolerance narrowed 1 → 0.5, turn weight 1.0 → 1.5, soft-landing penalty, half the commands ramp, 20 % spot turns / 10 % backwards, head style terms scaled by tracking quality | **Passed** (no stand-still collapse, no falls). Joint acceleration −32 % (Myr) / −25 % (DC); DC turns 30–32 of 36 °/s (v3: 21); Myrranox walks straight (drift 10 → 4 °/s) but still no spot turns (9 of 72 °/s) or backwards → speed reward on spot-turn commands now scaled by turn tracking (standing still earned it in full). `docs/evaluations/v4_pilot/`. |
+| 11 | 28 Sep 2026 | `myr_legs_v4` | Myrranox | 4M → **7M** (continued from `myr_legs_v2`, 1.1 h) | As #10 plus the spot-turn fix (speed reward on spot-turn commands scaled by turn tracking) | **Released.** Turns on the spot for the first time (58 of 72 °/s; v2: 7), walks straight (drift +10 → −1 °/s), full speed on target (1.20 / 1.2; v2 overshot 1.35), turn error 18.6 → 7.9 °/s, joint acceleration −24 %, head wobble −25 %, power −22 %. Still no walking backwards. Midpoint 5.25M already turned on the spot (37 °/s) – the stand-still trap did not come back. |
+| 12 | 28 Sep 2026 | `dc_legs_v4` | DC | 4M → **7M** (continued from `dc_legs_v3`, 1.1 h) | Same as #11 | **Released.** Turns +29 / −32 of ±36 °/s (v3: ±21), speed error 0.13 → 0.08 m/s, turn error 10.7 → 4.6 °/s, joint acceleration −27 %, head tilt 10.7 → 2.4°, power −15 %; trot slightly under the command (2.41 / 2.5; v3 overshot 2.69). Best turning at 5.25M (37–38 °/s) but worse speed there – the final brain is the best overall. |
 
 Reward values are **not comparable between sessions** — the reward definition changed each time.
 Compare sessions by the evaluation metrics (`metrics.csv`: speed/turn tracking error, falls, foot slip).
@@ -107,6 +109,33 @@ Untested idea: smaller movement ranges for the new Myrranox head/abdomen joints 
 8. (v3) A "style" penalty that every step pays (head wobble) can make standing still the best option again as the
    penalty curriculum ramps up – the light Myrranox head bounces with each step and the brain stopped walking; the
    heavy, well-suspended DC head did not. Style terms need to be weak or scaled per species.
+9. (v4) Check what standing still earns under every command type: on spot-turn commands the speed reward
+   (speed 0 = command 0) paid standing in full – that, not the body, kept the Myrranox from turning on the spot
+   through v1–v3. Scaling it by the turn tracking fixed it within 1.25M steps.
+10. (v4) Smoothness is easier to build in than to reward: a low-pass filter on the joint targets made both bodies
+    ~25 % smoother while tracking got better, not worse. Fine-tuning a released brain (3M steps) was enough.
+
+## Walking v4 – precise and fluid (28 Sep 2026)
+
+| | Myrranox v2 | **Myrranox v4** | DC v3 | **DC v4** |
+| --- | --- | --- | --- | --- |
+| Walk / full speed (m/s, command 0.6 / 1.2 and 0.8 / 2.5) | 0.58 / 1.35 | **0.60 / 1.20** | 0.83 / 2.69 | **0.79 / 2.41** |
+| Drift when walking straight (°/s) | +10 | **−1** | −2 | **0** |
+| Walking turns (°/s, command ±54 / ±36) | +56 / −53 | **+57 / −56** | +21 / −21 | **+29 / −32** |
+| Turn on the spot (°/s, command 72) | 7 | **58** | – | – |
+| Backwards (m/s, command −0.3) | −0.03 | −0.05 | – | – |
+| Mean speed error / turn error (whole script) | 0.10 m/s / 18.6 °/s | **0.10 / 7.9** | 0.13 / 10.7 | **0.08 / 4.6** |
+| Joint acceleration (rad/s², lower = smoother) | 84 | **64 (−24 %)** | 102 | **74 (−27 %)** |
+| Joint target change per 20 ms | 3.05° | **2.32°** | 3.91° | **3.14°** |
+| Head wobble (rad/s) / head tilt | 1.74 / 3.6° | **1.30 / 3.4°** | 0.69 / 10.7° | **0.65 / 2.4°** |
+| Power, walking script | 73 W | **57 W** | 947 W | **803 W** |
+| Falls | 0 | 0 | 0 | 0 |
+
+Fluid by design: the joint targets pass a low-pass filter (0.5 per 20 ms), so the brain cannot make the joints jump;
+the action-rate penalty now acts on the brain's raw output. Precise by curriculum: the speed / turn tolerance narrows
+from 1 to 0.5 between 20 % and 80 % of the run. Measurements: `docs/evaluations/v4/` (`precision_metrics.py`,
+`alive_metrics.py`), baseline `docs/evaluations/v4_baseline/`. Videos: `docs/videos/*_legs_v4_training.mp4`,
+`docs/videos/myr_legs_v2_vs_v4.mp4`, `docs/videos/dc_legs_v3_vs_v4.mp4`.
 
 ## Next ideas (one change per run)
 

@@ -139,7 +139,7 @@ Debug stand-ins (not RL): `record.py --policy heuristic` (scripted navigation, g
 | Part | State |
 | --- | --- |
 | Habitat sim, rules (territories, raids, energy-driven hunger), physics habitat world | done, tested |
-| Walking brains | **v2 released** (`models/*_legs_v2`): insect tripod / quadruped walk→trot, symmetric, efficient, no falls |
+| Walking brains | **v4 released** (`models/*_legs_v4`): precise + fluid – Myrranox turns on the spot, DC turns ±30 °/s, ~25 % smoother; built on v2 (natural gait) and, for the DC, v3 (alive body) |
 | Predator brains | **DC `models/dc_brain_v4_r1`** (4/5 section 12 checks); **Myrranox `models/myr_brain_v3_r1`** (hunts, but starves when its home is empty; fails with real legs) |
 | Blender | rigs, pose playback (0.01 mm), steady side cameras, overview, panel "Creatures", hunger/fatigue display |
 | Showcase | `docs/videos/showcase_side_by_side_v3.mp4` (5:00, alive DC v3 + Myrranox v2; first version `showcase_side_by_side.mp4`) |

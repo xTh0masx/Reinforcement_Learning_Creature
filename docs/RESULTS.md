@@ -39,6 +39,7 @@ The recorded body pose and joint angles are played back on the rigged models in 
 | 26 Sep | Blender: steady side cameras, overview, panel "Creatures", hunger/fatigue display (owner request) | Clear side view of the leg motion; free viewing of both creatures |
 | 26 Sep | Prey at half speed (owner decision); showcase re-recorded (5 min) | Myrranox catches prey and survives; DC catches 3 |
 | 26 Sep | Showcase rendered side by side (5:00) | `docs/videos/showcase_side_by_side.mp4` |
+| 28 Sep | Walking v4 (precise + fluid) for both, released | Myrranox turns on the spot; DC turns ±30 °/s; ~25 % smoother |
 | 27 Sep | Showcase v3: DC walking v3 (alive body) + Myrranox v2 + passive parts; side cameras dodge rocks | `docs/videos/showcase_side_by_side_v3.mp4` |
 
 ---
@@ -211,6 +212,31 @@ a fix (the retries v3b and v3c failed too, 27 Sep). Videos: `videos/dc_legs_v2_v
 passive parts: `docs/videos/showcase_side_by_side_v3.mp4` (still `figures/showcase_side_by_side_v3.jpg`). The side cameras now orbit to the
 other side of the creature when a rock or the wall would block the view (DC: 3 side changes in 5 min).
 
+## 6f. Walking v4 – precise and fluid (28 Sep)
+
+Owner request: movements more precise and fluid. No mesh changes (the brains only see the physics capsules); new
+settings in `sim/locomotion_env.py` version 4: joint-target filter, tracking tolerance 1 → 0.5, turn weight 1.5,
+soft-landing penalty, ramped commands, 20 % spot turns, head style paid only while tracking, speed reward on spot turns
+scaled by the turn. Both brains continued from the released ones for 3M steps (1.1 h, both in parallel), after a
+0.5M pilot.
+
+| | Myrranox v2 | **Myrranox v4** | DC v3 | **DC v4** |
+| --- | --- | --- | --- | --- |
+| Walk / full speed (m/s, command 0.6 / 1.2 and 0.8 / 2.5) | 0.58 / 1.35 | **0.60 / 1.20** | 0.83 / 2.69 | **0.79 / 2.41** |
+| Drift when walking straight (°/s) | +10 | **−1** | −2 | **0** |
+| Walking turns (°/s, command ±54 / ±36) | +56 / −53 | **+57 / −56** | +21 / −21 | **+29 / −32** |
+| Turn on the spot (°/s, command 72) | 7 | **58** | – | – |
+| Backwards (m/s, command −0.3) | −0.03 | −0.05 | – | – |
+| Mean speed error / turn error (whole script) | 0.10 m/s / 18.6 °/s | **0.10 / 7.9** | 0.13 / 10.7 | **0.08 / 4.6** |
+| Joint acceleration (rad/s², lower = smoother) | 84 | **64 (−24 %)** | 102 | **74 (−27 %)** |
+| Joint target change per 20 ms | 3.05° | **2.32°** | 3.91° | **3.14°** |
+| Head wobble (rad/s) / head tilt | 1.74 / 3.6° | **1.30 / 3.4°** | 0.69 / 10.7° | **0.65 / 2.4°** |
+| Power, walking script | 73 W | **57 W** | 947 W | **803 W** |
+| Falls | 0 | 0 | 0 | 0 |
+
+Both v4 brains are released and are the default walkers of `record_world.py`. Open: Myrranox walking backwards.
+In the physics habitat (1-min test, `record_world.py`): no falls, both catch prey.
+
 ## 7. Videos and graphs
 
 | File | What it shows |
@@ -228,6 +254,8 @@ other side of the creature when a rock or the wall would block the view (DC: 3 s
 | `figures/myr_legs_pilot2_1M.gif` | Pilot 2 standing still at 1M steps |
 | `videos/showcase_side_by_side.mp4` | **Showcase, 5:00**: Myrranox (left) and DC (right) living in the habitat, everything learned (predator + walking brains), steady side cameras with hunger/fatigue – rendered from `blender/habitat_showcase.blend` (DC walking v2) |
 | `videos/showcase_side_by_side_v3.mp4` | **Showcase v3, 5:00**: the same with the alive DC (walking v3) and Myrranox v2 + passive parts; cameras dodge rocks |
+| `videos/*_legs_v4_training.mp4`, `videos/myr_legs_v2_vs_v4.mp4`, `videos/dc_legs_v3_vs_v4.mp4` | **Walking v4 (precise + fluid)**: whole fine-tuning (4M → 7M, every 250k) next to the learning curve; before / after on the same commands |
+| `figures/locomotion/*_legs_v4/`, `figures/gait/*_legs_v4_*` | v4 progress graphs, checkpoint clips, footfall diagrams (incl. Myrranox spot turn `myr_legs_v4_footfall_0.00.png`) |
 | `videos/*_legs_v3_training.mp4`, `videos/*_legs_v2_vs_v3.mp4` | Walking v3 (alive body): whole training; stage 1 vs stage 2 side by side |
 | `videos/predator/<run>_training.mp4` | Every predator training run (8): one habitat day per checkpoint, untrained → 3M, next to the learning curve |
 | `evaluations/*.txt, *.json` | Section 12 checks of the predator brains and the scripted baseline |
@@ -258,7 +286,7 @@ Live during training: `tensorboard --logdir runs`, `python watch_locomotion.py -
 
 ## 9. Next (open)
 
-- Myrranox: walking v3 with turning on the spot, or fine-tuning its predator brain with the physics body (plan D2);
+- Myrranox: walking backwards (v4 still fails); fine-tuning its predator brain with the physics body (plan D2);
   fatigue balance (owner decision).
 - Raids and territory defence (not learned); alternating rounds against the other species' trained brain.
 - Final scene: 2 Myrranox + 2 DC; terrain/props; relink the Myrranox textures and re-render.
