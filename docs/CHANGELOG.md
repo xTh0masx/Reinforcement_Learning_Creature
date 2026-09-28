@@ -7,6 +7,14 @@ time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
 ## 28 Sep 2026
 
+**Showcase v4 rendered** (`7f4aeba`, owner: "yes start")
+- Re-recorded with walking v4 (`recordings/showcase_v4.csv`, seed 8, 5 min): no falls, DC 6 prey, Myrranox 2 prey
+  and survives. Side cameras changed side 2× (Myrranox) and 5× (DC) to avoid rocks.
+- `docs/videos/showcase_side_by_side_v4.mp4`: 5:00, 2 × 9001 frames, render 13:13 → 18:05 (4.9 h), stitched by 18:17. Still
+  `docs/figures/showcase_side_by_side_v4.jpg`. The v3 and first showcase videos are kept.
+- Known: prey balls can pass in front of a camera (only rocks and walls are avoided); after a side change the camera
+  can face against the sun and the creature looks dark.
+
 **Walking v4 – precise and fluid** (`88d54ec`, owner request; both brains released)
 - `sim/locomotion_env.py` version 4: joint-target low-pass filter (`ACTION_FILTER` 0.5), tracking tolerance curriculum
   (`set_track_scale`, `train_locomotion.py` `TrackingCurriculum`, `--track-end`), turn weight 1.5, soft-landing
