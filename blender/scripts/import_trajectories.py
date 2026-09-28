@@ -377,7 +377,7 @@ def _install_view_panel(csv_path):
     exec(compile(code, "rl_view_panel.py", "exec"), {"__name__": "__main__"})
 
 
-def import_csv(path):
+def import_csv(path, habitat_path=None):
     path = os.path.abspath(path)
     scene = bpy.context.scene
     scene.render.fps = FPS
@@ -400,7 +400,7 @@ def import_csv(path):
 
     # rocks and walls for the side cameras' occlusion check (<repo>/recordings/x.csv -> <repo>/sim/habitat.json)
     import json
-    hab_path = os.path.join(os.path.dirname(os.path.dirname(path)), "sim", "habitat.json")
+    hab_path = habitat_path or os.path.join(os.path.dirname(os.path.dirname(path)), "sim", "habitat.json")
     obstacles, bounds = [], (-1e9, 1e9, -1e9, 1e9)
     if os.path.exists(hab_path):
         hab = json.load(open(hab_path, encoding="utf-8"))

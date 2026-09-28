@@ -20,20 +20,21 @@ from sim.nav_brain import NavBrain
 from sim.physics_world import PhysicsWorld
 
 PREDATORS = {"myrranox": "models/myr_brain_v3_r1", "dc": "models/dc_brain_v4_r1"}
-# Walking brains: DC v3 = "alive" body (spine / neck / head controlled); Myrranox v2 + passive parts (its v3 failed)
+# Walking brains v4 (precise + fluid): DC on the "alive" v3 body, Myrranox on the v2 body + passive parts
 WALKERS = {"myrranox": "models/myr_legs_v4", "dc": "models/dc_legs_v4"}
 
 
-def make_env(ego, other, seed):
+def make_env(ego, other, seed, habitat_path=None):
     ego_brain = NavBrain(PREDATORS[ego])
     obs_version = 1 if ego_brain.model.observation_space.shape[0] == 81 else 2
-    env = CreatureEnv(ego, others=[{"species": other, "brain": PREDATORS[other]}], obs_version=obs_version)
+    env = CreatureEnv(ego, others=[{"species": other, "brain": PREDATORS[other]}], obs_version=obs_version,
+                      habitat_path=habitat_path)
     obs, _ = env.reset(seed=seed)
     return env, ego_brain, obs
 
 
-def survival_2d(ego, other, seed, steps):
-    env, brain, obs = make_env(ego, other, seed)
+def survival_2d(ego, other, seed, steps, habitat_path=None):
+    env, brain, obs = make_env(ego, other, seed, habitat_path)
     for t in range(steps):
         obs, _, term, _, _ = env.step(brain(obs))
         if term:
@@ -47,6 +48,7 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--pick-seed", type=int, default=0, help="try this many seeds in 2D first, keep the best")
     p.add_argument("--out", default="recordings/showcase.csv")
+    p.add_argument("--habitat", default=None, help="habitat file (default sim/habitat.json), e.g. sim/habitat_no_rocks.json")
     p.add_argument("--rigid", action="store_true", help="bodies without the spring tail/abdomen/head/arms (stage 1)")
     p.add_argument("--walk-myr", default=None, help="walking brain for the Myrranox (default WALKERS)")
     p.add_argument("--walk-dc", default=None, help="walking brain for the DC (default WALKERS)")
@@ -61,14 +63,14 @@ def main():
 
     seed = args.seed
     if args.pick_seed:
-        scores = {s: survival_2d(ego, other, s, steps) for s in range(args.pick_seed)}
+        scores = {s: survival_2d(ego, other, s, steps, args.habitat) for s in range(args.pick_seed)}
         seed = max(scores, key=scores.get)
         print("2D survival per seed (steps):", scores, "-> seed", seed)
 
-    env, ego_brain, obs = make_env(ego, other, seed)
+    env, ego_brain, obs = make_env(ego, other, seed, args.habitat)
     creatures = env.creatures
     world = PhysicsWorld([{"id": c.id, "species": c.species.name, "loco": WALKERS[c.species.name],
-                           "pos": tuple(c.pos), "yaw": c.heading} for c in creatures], Habitat.load(), seed=seed,
+                           "pos": tuple(c.pos), "yaw": c.heading} for c in creatures], Habitat.load(args.habitat), seed=seed,
                          passive=not args.rigid)
 
     out = Path(args.out)

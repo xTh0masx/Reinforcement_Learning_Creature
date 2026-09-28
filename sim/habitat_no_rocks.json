@@ -1,0 +1,102 @@
+{
+  "_comment": "Copy of habitat.json without rocks (owner request 28 Sep: showcase without rocks). Training uses habitat.json.",
+  "boundary": {
+    "xmin": -50.0,
+    "xmax": 50.0,
+    "ymin": -50.0,
+    "ymax": 50.0
+  },
+  "home_zones": {
+    "myrranox": {
+      "type": "circle",
+      "center": [
+        -20.0,
+        -15.0
+      ],
+      "radius": 28.0,
+      "terrain": "sand_rock"
+    },
+    "dc": {
+      "type": "circle",
+      "center": [
+        20.0,
+        15.0
+      ],
+      "radius": 28.0,
+      "terrain": "vegetation"
+    }
+  },
+  "water": {
+    "type": "circle",
+    "center": [
+      0.0,
+      0.0
+    ],
+    "radius": 4.0
+  },
+  "rest_spots": [
+    {
+      "center": [
+        -30.0,
+        -28.0
+      ],
+      "radius": 2.0,
+      "kind": "burrow"
+    },
+    {
+      "center": [
+        -12.0,
+        -30.0
+      ],
+      "radius": 2.0,
+      "kind": "burrow"
+    },
+    {
+      "center": [
+        -32.0,
+        -5.0
+      ],
+      "radius": 2.0,
+      "kind": "burrow"
+    },
+    {
+      "center": [
+        30.0,
+        28.0
+      ],
+      "radius": 2.0,
+      "kind": "shade"
+    },
+    {
+      "center": [
+        12.0,
+        30.0
+      ],
+      "radius": 2.0,
+      "kind": "shade"
+    },
+    {
+      "center": [
+        32.0,
+        5.0
+      ],
+      "radius": 2.0,
+      "kind": "shade"
+    }
+  ],
+  "obstacles": [],
+  "prey": {
+    "_rules": "PROJECT_PLAN.md section 15: own-territory prey do not respawn, raided prey re-appear in the eater's territory, neutral prey respawn after respawn_seconds",
+    "per_territory": 5,
+    "neutral": 3,
+    "radius": 0.2,
+    "wander_speed": 0.15,
+    "flee_speed": 0.35,
+    "flee_radius": 5.0,
+    "respawn_seconds": [
+      60.0,
+      120.0
+    ],
+    "respawn_min_distance": 10.0
+  }
+}
