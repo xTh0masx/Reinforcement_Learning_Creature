@@ -19,6 +19,26 @@ from sim.locomotion_env import LocomotionEnv
 from sim.symmetry import SymmetricPPO, mirror_maps
 
 
+class TrackingCurriculum(BaseCallback):
+    """Version 4: narrow the speed / turn tracking tolerance from 1 to `end` between 20 % and 80 % of this run
+    (counted from where the run starts, also when resuming)."""
+
+    def __init__(self, steps, end=0.5):
+        super().__init__()
+        self.steps, self.end, self.t0 = steps, end, None
+
+    def _on_rollout_start(self):
+        if self.t0 is None:
+            self.t0 = self.num_timesteps
+        frac = min(1.0, max(0.0, ((self.num_timesteps - self.t0) / self.steps - 0.2) / 0.6))
+        scale = 1.0 + (self.end - 1.0) * frac
+        self.training_env.env_method("set_track_scale", scale)
+        self.logger.record("train/track_scale", scale)
+
+    def _on_step(self):
+        return True
+
+
 class PenaltyCurriculum(BaseCallback):
     """Scale the smoothness/effort penalties from `start` to 1 over the first `ramp` fraction of training,
     so the brain first discovers walking and then learns to walk cleanly."""
@@ -46,7 +66,9 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--resume", default=None, help="models/<run> to continue from")
     p.add_argument("--ckpt-every", type=float, default=250_000)
-    p.add_argument("--version", type=int, default=1, help="1 = original reward, 2 = natural gait + symmetry")
+    p.add_argument("--version", type=int, default=1,
+                   help="1 = original reward, 2 = natural gait + symmetry, 3 = alive body, 4 = precise + fluid")
+    p.add_argument("--track-end", type=float, default=0.5, help="version 4: final tracking tolerance scale")
     p.add_argument("--sym-weight", type=float, default=1.0, help="mirror-symmetry loss weight (version 2)")
     p.add_argument("--head-weight", type=float, default=1.0,
                    help="scale of the version-3 head steadiness/level penalties (0.1 = ten times weaker)")
@@ -69,6 +91,8 @@ def main():
         env = VecNormalize.load(vecnormalize_path(args.resume), env)
         model = algo.load(args.resume, env=env, tensorboard_log="runs/")
         print(f"resumed {args.resume} at {model.num_timesteps} steps", flush=True)
+        model.save(f"checkpoints/{run}_{model.num_timesteps}_steps")      # the starting brain, for the progress video
+        env.save(f"checkpoints/{run}_vecnormalize_{model.num_timesteps}_steps.pkl")
     else:
         env = VecNormalize(env, norm_obs=True, norm_reward=True, clip_obs=10.0, gamma=0.99)
         model = algo(
@@ -80,6 +104,7 @@ def main():
                                activation_fn=torch.nn.ELU, log_std_init=-1.0),
             tensorboard_log="runs/", seed=args.seed, verbose=1, **algo_kwargs,
         )
+    model.loco_version = args.version          # saved with the brain (play_locomotion.brain_version)
     if args.version >= 2:
         model.set_mirror(mirror_maps(LocomotionEnv(args.species, version=args.version)))
 
@@ -88,7 +113,10 @@ def main():
         env.save(f"checkpoints/{run}_vecnormalize_0_steps.pkl")
     ckpt = CheckpointCallback(max(int(args.ckpt_every) // args.envs, 1), "checkpoints/", name_prefix=run,
                               save_vecnormalize=True)
-    callbacks = CallbackList([ckpt, PenaltyCurriculum(int(args.curriculum_total or args.steps), fixed=args.penalty_fixed)])
+    callbacks = [ckpt, PenaltyCurriculum(int(args.curriculum_total or args.steps), fixed=args.penalty_fixed)]
+    if args.version >= 4:
+        callbacks.append(TrackingCurriculum(int(args.steps), end=args.track_end))
+    callbacks = CallbackList(callbacks)
     model.learn(total_timesteps=int(args.steps), tb_log_name=run, callback=callbacks,
                 reset_num_timesteps=not args.resume)
     model.save(f"models/{run}")

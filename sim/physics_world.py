@@ -14,7 +14,7 @@ import mujoco
 import numpy as np
 
 from sim.bodies import BODIES, build_world_mjcf
-from sim.locomotion_env import CONTROL_DT, FRAME_SKIP, LocomotionEnv
+from sim.locomotion_env import CONTROL_DT, FRAME_SKIP, LocomotionEnv, body_for
 
 NAV_DT = 0.1
 SUBSTEPS = int(round(NAV_DT / CONTROL_DT))
@@ -37,7 +37,7 @@ class PhysicsWorld:
         specs = []
         for c in creatures:
             v = getattr(self.brains[c["id"]], "version", 1)
-            spec = BODIES[c["species"]](passive=True, active=True) if v >= 3 else BODIES[c["species"]](passive=passive)
+            spec = body_for(c["species"], v, passive)
             specs.append((spec, f'{c["id"]}_', tuple(c["pos"]), c.get("yaw", 0.0)))
         self.model = mujoco.MjModel.from_xml_string(build_world_mjcf(specs, habitat))
         self.data = mujoco.MjData(self.model)

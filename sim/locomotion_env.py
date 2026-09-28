@@ -12,6 +12,13 @@ version=2  natural gait: a gait clock per leg is added to the observation and th
            Trained with the mirror-symmetry loss (sim/symmetry.py). More turn / backwards commands.
 version=3  "alive" bodies (stage 2): as version 2, plus spring body parts (tail, arms) and actuated spine / neck /
            head / abdomen (sim/bodies.py active=True); rewards a steady, level head (the "panther gaze").
+version=4  precise and fluid (28 Sep): the brain's joint targets pass a low-pass filter (no jumps at 50 Hz),
+           speed / turn tracking gets stricter during training (set_track_scale), turning weighs as much as
+           speed, soft foot landings, commands ramp like the navigation brain's. Body per species (ACTIVE):
+           DC keeps the v3 active spine / neck / head, the Myrranox the v2 body with passive parts (its v3 failed).
+           Head style terms are paid only in proportion to how well the command is tracked, so standing still
+           can no longer dodge them (walking log lesson 8). On spot-turn commands the speed reward is scaled by the
+           turn tracking, so standing still no longer earns it.
 
 Shared world: pass model/data/prefix to drive one creature inside a bigger MuJoCo world
 (sim/physics_world.py). Then call apply_action(), step the world, and after_physics() - step() does
@@ -47,7 +54,20 @@ WEIGHTS = {
 WEIGHTS[3] = dict(WEIGHTS[2],
                   head_steady=-0.05,    # |head angular velocity - commanded turn|^2 (rad/s): a calm head
                   head_level=-2.0)      # 1 - cos(head tilt): keep the gaze level
+WEIGHTS[4] = dict(WEIGHTS[3],
+                  ang=1.5,              # turning counts as much as speed (lesson 4: turning lagged)
+                  landing=-0.05)        # per touchdown: (foot vertical speed, m/s)^2 - soft steps
 TASK_TERMS = ("lin", "ang", "gait", "clearance", "air_time")
+ACTIVE = {3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
+ACTION_FILTER = 0.5          # version 4: target += 0.5 * (action - target) every 20 ms, about 5.5 Hz cut-off
+COMMAND_RAMP_S = (1.5, 1.0)  # version 4: seconds to ramp from 0 to max speed / max turn rate (half the commands)
+
+
+def body_for(species, version, passive=False):
+    """The body a walking brain of this version controls."""
+    if ACTIVE.get(version, {}).get(species, False):
+        return BODIES[species](passive=True, active=True)
+    return BODIES[species](passive=passive or version >= 4)
 
 
 class LocomotionEnv(gym.Env):
@@ -58,10 +78,7 @@ class LocomotionEnv(gym.Env):
                  model=None, data=None, prefix="", passive=False, head_weight=1.0):
         self.species_name = species
         self.species = SPECIES[species]
-        if version >= 3:
-            self.body = BODIES[species](passive=True, active=True)
-        else:
-            self.body = BODIES[species](passive=passive)   # passive=True: tail/abdomen/head/arms on springs
+        self.body = body_for(species, version, passive)     # passive=True: tail/abdomen/head/arms on springs
         self.version = version
         self.w = dict(WEIGHTS[version])
         for k in ("head_steady", "head_level"):              # scale of the v3 head penalties (train_locomotion.py)
@@ -120,6 +137,7 @@ class LocomotionEnv(gym.Env):
         self._renderer = None
         self._size = (height, width)
         self.penalty_scale = 1.0        # ramped up from ~0.2 during training (train_locomotion.py)
+        self.track_scale = 1.0          # version 4: tracking tolerance, lowered to 0.5 during training
 
     # ------------------------------------------------------------------------------------------
     def reset(self, *, seed=None, options=None):
@@ -151,13 +169,16 @@ class LocomotionEnv(gym.Env):
                 mujoco.mj_step(self.model, self.data)
 
         self.t = 0
-        self.last_action = np.zeros(self.nj)
+        self.last_action = np.zeros(self.nj)     # version 4: the filtered target the joints are driven to
+        self.last_raw = self.raw = np.zeros(self.nj)
         self.prev_foot_pos = self.data.site_xpos[self.foot_sites].copy()
         self.prev_qvel = self.data.qvel[self.joint_qvel].copy()
         self.phase = float(rng.uniform())
         self.air_time = np.zeros(self.nlegs)
         self.prev_contact = np.ones(self.nlegs, dtype=bool)
         self.command = np.zeros(2)
+        self.command_target = np.zeros(2)
+        self.command_rate = None
         self.command_steps_left = 0
         if options and "command" in options:
             self.set_command(*options["command"], hold=True)
@@ -170,6 +191,8 @@ class LocomotionEnv(gym.Env):
         sp = self.species
         self.command = np.array([np.clip(speed, -sp.max_backward_speed, sp.max_speed),
                                  np.clip(turn_rate, -sp.max_turn_rate, sp.max_turn_rate)])
+        self.command_target = self.command.copy()
+        self.command_rate = None
         self.command_steps_left = 10 ** 9 if hold else self.command_steps_left
 
     def _resample_command(self):
@@ -177,16 +200,23 @@ class LocomotionEnv(gym.Env):
         u = rng.uniform()
         if u < self.stand_prob:
             v, w = 0.0, 0.0
-        elif self.version >= 2 and sp.turn_in_place and u < self.stand_prob + 0.10:
+        elif self.version >= 2 and sp.turn_in_place and u < self.stand_prob + (0.20 if self.version >= 4 else 0.10):
             v, w = 0.0, rng.uniform(-sp.max_turn_rate, sp.max_turn_rate)            # turn on the spot
-        elif self.version >= 2 and sp.max_backward_speed > 0 and u < self.stand_prob + 0.20:
+        elif (self.version >= 2 and sp.max_backward_speed > 0
+              and u < self.stand_prob + (0.30 if self.version >= 4 else 0.20)):
             v, w = -rng.uniform(0.1, sp.max_backward_speed), 0.0                      # walk backwards
         else:
             v = rng.uniform(-sp.max_backward_speed, sp.max_speed) if self.version == 1 else rng.uniform(0.1, sp.max_speed)
             w = rng.uniform(-sp.max_turn_rate, sp.max_turn_rate) * (rng.uniform() < (0.7 if self.version == 1 else 0.8))
             if not sp.turn_in_place and abs(v) < sp.min_turn_speed:
                 w *= abs(v) / sp.min_turn_speed
-        self.command = np.array([v, w])
+        if self.version >= 4 and rng.uniform() < 0.5:        # ramp to the new command, like the navigation brain
+            self.command_target = np.array([v, w])
+            self.command_rate = np.array([sp.max_speed / COMMAND_RAMP_S[0],
+                                          sp.max_turn_rate / COMMAND_RAMP_S[1]]) * CONTROL_DT
+        else:
+            self.command = self.command_target = np.array([v, w])
+            self.command_rate = None
         self.command_steps_left = int(rng.uniform(*self.command_seconds) / CONTROL_DT)
 
     # ------------------------------------------------------------------------------------------
@@ -209,6 +239,9 @@ class LocomotionEnv(gym.Env):
     def apply_action(self, action):
         """Set this creature's joint targets; returns the clipped action (pass it to after_physics)."""
         a = np.clip(np.asarray(action, dtype=float), -1.0, 1.0)
+        if self.version >= 4:                   # low-pass: the joint targets glide instead of jumping
+            self.raw = a
+            a = self.last_action + ACTION_FILTER * (a - self.last_action)
         self.data.ctrl[self.act_ids] = np.clip(self.rest_joints + a * self.action_scales,
                                                self.joint_lo, self.joint_hi)
         return a
@@ -238,7 +271,8 @@ class LocomotionEnv(gym.Env):
                 body_contact = True
 
         foot_pos = d.site_xpos[self.foot_sites]
-        foot_vel = (foot_pos - self.prev_foot_pos)[:, :2] / CONTROL_DT
+        foot_vel3 = (foot_pos - self.prev_foot_pos) / CONTROL_DT
+        foot_vel = foot_vel3[:, :2]
         self.prev_foot_pos = foot_pos.copy()
         qvel = d.qvel[self.joint_qvel]
         qacc = (qvel - self.prev_qvel) / CONTROL_DT
@@ -246,8 +280,8 @@ class LocomotionEnv(gym.Env):
         power = float(np.sum(np.abs(d.actuator_force[self.act_ids] * qvel)))        # W, mechanical
 
         sp, w = self.species, self.w
-        sig_v = 0.5 * sp.max_speed      # wide enough that moving a little already pays off
-        sig_w = 0.5 * sp.max_turn_rate
+        sig_v = 0.5 * sp.max_speed * self.track_scale      # wide enough that moving a little already pays off
+        sig_w = 0.5 * sp.max_turn_rate * self.track_scale
         lin_err = (lin[0] - self.command[0]) ** 2 + lin[1] ** 2
         ang_err = (ang[2] - self.command[1]) ** 2
         torque = d.actuator_force[self.act_ids] / self.body.max_torque
@@ -259,12 +293,17 @@ class LocomotionEnv(gym.Env):
             "vz": w["vz"] * lin[2] ** 2,
             "roll_pitch": w["roll_pitch"] * (ang[0] ** 2 + ang[1] ** 2),
             "tilt": w["tilt"] * (grav[0] ** 2 + grav[1] ** 2),
-            "action_rate": w["action_rate"] * float(np.sum((a - self.last_action) ** 2)),
+            "action_rate": w["action_rate"] * float(np.sum((self.raw - self.last_raw) ** 2 if self.version >= 4
+                                                           else (a - self.last_action) ** 2)),
             "torque": w["torque"] * float(np.sum(torque ** 2)) / self.nj * 4,
             "foot_slip": w["foot_slip"] * float(np.sum(np.minimum((foot_vel ** 2).sum(axis=1), 1.0) * foot_contact)),
             "body_contact": w["body_contact"] * body_contact,
             "joint_limit": w["joint_limit"] * near_limit,
         }
+        if self.version >= 4 and abs(self.command[0]) < 0.05 and abs(self.command[1]) > 0.1:
+            # Turn on the spot: standing still matches the speed command perfectly, so the speed reward only
+            # counts as far as the turn is achieved (the Myrranox never learned spot turns in v1-v3).
+            terms["lin"] *= math.exp(-ang_err / sig_w ** 2)
 
         leg_phase = stance = None
         if self.version >= 2:
@@ -283,6 +322,8 @@ class LocomotionEnv(gym.Env):
                 terms["clearance"] = 0.0
             # Air time: reward full swings, punish taps (only while walking)
             touchdown = foot_contact & ~self.prev_contact
+            if "landing" in w:
+                terms["landing"] = w["landing"] * float(np.sum(np.minimum(foot_vel3[touchdown, 2] ** 2, 4.0)))
             t_swing = (1 - duty) / f
             if not standing and touchdown.any():
                 terms["air_time"] = w["air_time"] * float(np.sum(np.minimum(self.air_time[touchdown] / t_swing, 1.0) - 0.5))
@@ -299,10 +340,19 @@ class LocomotionEnv(gym.Env):
                 w_err = w_head - np.array([0.0, 0.0, self.command[1]])
                 terms["head_steady"] = w["head_steady"] * float(w_err @ w_err)
                 terms["head_level"] = w["head_level"] * (1.0 - float(d.xmat[self.head_body].reshape(3, 3)[2, 2]))
+                if self.version >= 4:            # style only counts while the command is tracked (lesson 8)
+                    track = math.exp(-lin_err / sig_v ** 2)
+                    terms["head_steady"] *= track
+                    terms["head_level"] *= track
 
         reward = sum(v for k, v in terms.items() if k in TASK_TERMS) + self.penalty_scale * float(
             sum(v for k, v in terms.items() if k not in TASK_TERMS))
         self.last_action = a
+        if self.version >= 4:
+            self.last_raw = self.raw
+            if self.command_rate is not None:
+                self.command = self.command + np.clip(self.command_target - self.command, -self.command_rate,
+                                                      self.command_rate)
 
         self.t += 1
         self.command_steps_left -= 1
@@ -320,6 +370,9 @@ class LocomotionEnv(gym.Env):
 
     def set_penalty_scale(self, scale):
         self.penalty_scale = float(scale)
+
+    def set_track_scale(self, scale):
+        self.track_scale = float(scale)
 
     def _leg_height(self):
         return float(np.mean([leg.points[0, 2] for leg in self.body.legs]))

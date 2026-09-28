@@ -1,0 +1,21 @@
+[
+  {
+    "brain": "models/myr_legs_v2",
+    "version": 2,
+    "head_wobble_rad_s": 1.7393251861040662,
+    "torso_wobble_rad_s": 0.6225818767047512,
+    "head_calmer_than_torso": 0.35794449576118614,
+    "head_tilt_deg": 3.642874183948344,
+    "joint_swing_deg": {
+      "abdomen_p0x": 1.534076300541341,
+      "abdomen_p0y": 1.7499654874913113,
+      "head_p0x": 2.946048582835404,
+      "head_p0y": 2.753108139364371
+    },
+    "joint_acc_rms": 83.57440624872005,
+    "target_jump_deg": 3.0521229248389035,
+    "speed_error": 0.10156877052493572,
+    "power_w": 73.2795561988457,
+    "falls": 0
+  }
+]
