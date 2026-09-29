@@ -74,15 +74,15 @@ python watch_predator.py --run dc_brain_v4_r1 --species dc --rival myrranox     
 ## Showcase: both predators with real legs
 
 ```bash
-python record_world.py --minutes 5 --pick-seed 8 --out recordings/showcase_v4.csv
+python record_world.py --minutes 5 --pick-seed 8 --habitat sim/habitat_no_rocks.json --out recordings/showcase_v4_no_rocks.csv
 ```
 
 In Blender import it (below), then use the sidebar panel **Creatures** (N key). Render the side-by-side video:
 
 ```bash
-blender -b blender/habitat_showcase.blend --python blender/scripts/render_camera.py -- --camera SideCam_myrranox_0 --out renders/showcase_v4/myrranox
-blender -b blender/habitat_showcase.blend --python blender/scripts/render_camera.py -- --camera SideCam_dc_0 --out renders/showcase_v4/dc
-python make_side_by_side.py --left renders/showcase_v4/myrranox --right renders/showcase_v4/dc --out docs/videos/showcase_side_by_side_v4.mp4
+blender -b blender/habitat_showcase.blend --python blender/scripts/render_camera.py -- --camera SideCam_myrranox_0 --out renders/showcase_v4_no_rocks/myrranox
+blender -b blender/habitat_showcase.blend --python blender/scripts/render_camera.py -- --camera SideCam_dc_0 --out renders/showcase_v4_no_rocks/dc
+python make_side_by_side.py --left renders/showcase_v4_no_rocks/myrranox --right renders/showcase_v4_no_rocks/dc --out docs/videos/showcase_side_by_side_v4_no_rocks.mp4
 ```
 
 ## Record and play back in Blender
@@ -142,7 +142,7 @@ Debug stand-ins (not RL): `record.py --policy heuristic` (scripted navigation, g
 | Walking brains | **v4 released** (`models/*_legs_v4`): precise + fluid – Myrranox turns on the spot, DC turns ±30 °/s, ~25 % smoother; built on v2 (natural gait) and, for the DC, v3 (alive body) |
 | Predator brains | **DC `models/dc_brain_v4_r1`** (4/5 section 12 checks); **Myrranox `models/myr_brain_v3_r1`** (hunts, but starves when its home is empty; fails with real legs) |
 | Blender | rigs, pose playback (0.01 mm), steady side cameras, overview, panel "Creatures", hunger/fatigue display |
-| Showcase | `docs/videos/showcase_side_by_side_v4.mp4` (5:00, both on walking v4; earlier versions `showcase_side_by_side_v3.mp4`, `showcase_side_by_side.mp4`) |
+| Showcase | `docs/videos/showcase_side_by_side_v4_no_rocks.mp4` (5:00, both on walking v4, no rocks; with rocks `showcase_side_by_side_v4.mp4`; earlier versions `showcase_side_by_side_v3.mp4`, `showcase_side_by_side.mp4`) |
 | Open | raids/defence, Myrranox turning on the spot, 2+2 creatures, textures, paper/slides |
 
 What happened and all results: **[docs/RESULTS.md](docs/RESULTS.md)** · changes: [docs/CHANGELOG.md](docs/CHANGELOG.md) · time spent: [docs/TIME_LOG.md](docs/TIME_LOG.md) ·

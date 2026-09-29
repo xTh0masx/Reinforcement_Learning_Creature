@@ -39,6 +39,7 @@ The recorded body pose and joint angles are played back on the rigged models in 
 | 26 Sep | Blender: steady side cameras, overview, panel "Creatures", hunger/fatigue display (owner request) | Clear side view of the leg motion; free viewing of both creatures |
 | 26 Sep | Prey at half speed (owner decision); showcase re-recorded (5 min) | Myrranox catches prey and survives; DC catches 3 |
 | 26 Sep | Showcase rendered side by side (5:00) | `docs/videos/showcase_side_by_side.mp4` |
+| 29 Sep | Showcase v4 without rocks (owner): rocks removed from physics and Blender, re-recorded | `docs/videos/showcase_side_by_side_v4_no_rocks.mp4` |
 | 28 Sep | Showcase v4: both creatures on walking v4 (DC 6 prey, Myrranox 2, no falls) | `docs/videos/showcase_side_by_side_v4.mp4` |
 | 28 Sep | Walking v4 (precise + fluid) for both, released | Myrranox turns on the spot; DC turns ±30 °/s; ~25 % smoother |
 | 27 Sep | Showcase v3: DC walking v3 (alive body) + Myrranox v2 + passive parts; side cameras dodge rocks | `docs/videos/showcase_side_by_side_v3.mp4` |
@@ -240,6 +241,8 @@ In the physics habitat (1-min test, `record_world.py`): no falls, both catch pre
 
 **Showcase v4:** 5-minute showcase re-recorded and rendered with both v4 walkers: `docs/videos/showcase_side_by_side_v4.mp4` (still
 `figures/showcase_side_by_side_v4.jpg`). No falls; DC 6 prey, Myrranox 2 prey and survives.
+Without rocks (owner, 29 Sep): `docs/videos/showcase_side_by_side_v4_no_rocks.mp4` – rocks removed from the physics world and the Blender scene;
+no falls, Myrranox 3 prey, DC 4 prey.
 
 ## 7. Videos and graphs
 
@@ -257,7 +260,8 @@ In the physics habitat (1-min test, `record_world.py`): no falls, both catch pre
 | `figures/gait/*_legs_v2_<N>_steps_footfall_*.png` | Gait during v2 training (1M, 1.5M, 2.75M, 3.5M) |
 | `figures/myr_legs_pilot2_1M.gif` | Pilot 2 standing still at 1M steps |
 | `videos/showcase_side_by_side.mp4` | **Showcase, 5:00**: Myrranox (left) and DC (right) living in the habitat, everything learned (predator + walking brains), steady side cameras with hunger/fatigue – rendered from `blender/habitat_showcase.blend` (DC walking v2) |
-| `videos/showcase_side_by_side_v4.mp4` | **Showcase v4, 5:00 (latest)**: both creatures on walking v4 (precise + fluid), rock-dodging side cameras |
+| `videos/showcase_side_by_side_v4_no_rocks.mp4` | **Showcase v4 without rocks, 5:00 (latest)**: both on walking v4, habitat without rocks (`sim/habitat_no_rocks.json`) |
+| `videos/showcase_side_by_side_v4.mp4` | **Showcase v4, 5:00**: both creatures on walking v4 (precise + fluid), rock-dodging side cameras |
 | `videos/showcase_side_by_side_v3.mp4` | **Showcase v3, 5:00**: the same with the alive DC (walking v3) and Myrranox v2 + passive parts; cameras dodge rocks |
 | `videos/*_legs_v4_training.mp4`, `videos/myr_legs_v2_vs_v4.mp4`, `videos/dc_legs_v3_vs_v4.mp4` | **Walking v4 (precise + fluid)**: whole fine-tuning (4M → 7M, every 250k) next to the learning curve; before / after on the same commands |
 | `figures/locomotion/*_legs_v4/`, `figures/gait/*_legs_v4_*` | v4 progress graphs, checkpoint clips, footfall diagrams (incl. Myrranox spot turn `myr_legs_v4_footfall_0.00.png`) |

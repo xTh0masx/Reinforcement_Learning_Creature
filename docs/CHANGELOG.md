@@ -5,6 +5,20 @@ All changes and owner decisions, newest first. Commit hashes refer to branch `rl
 [predator_training_log.md](predator_training_log.md), [experiments.csv](experiments.csv),
 time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
+## 29 Sep 2026
+
+**Showcase v4 without rocks** (`e5d01f1`, owner: "redo the video but delete the rocks")
+- Rocks removed from the physics world too (not only hidden), so the creatures do not steer around invisible rocks:
+  `sim/habitat_no_rocks.json` (copy of `habitat.json` with no obstacles; training still uses `habitat.json`),
+  `record_world.py --habitat`, `import_trajectories.import_csv(path, habitat_path)`; the 14 rocks were deleted from
+  `blender/habitat_showcase.blend` (the version with rocks is in git history).
+- Recording `recordings/showcase_v4_no_rocks.csv` (5 min, seed 8): no falls, Myrranox 3 prey, DC 4 prey.
+  Side cameras: 0 side changes (Myrranox), 1 (DC, wall).
+- `docs/videos/showcase_side_by_side_v4_no_rocks.mp4`: 5:00, 2 × 9001 frames. Render 28 Sep 18:25 → 21:50, paused overnight (laptop closed; resumed from the
+  existing frames), 29 Sep 08:11 → 09:02, stitched 09:10 – 4.3 h render in total. Still
+  `docs/figures/showcase_side_by_side_v4_no_rocks.jpg`.
+- Known: the DC looks dark when it walks with the sun behind it from the camera's view (lighting, not rocks).
+
 ## 28 Sep 2026
 
 **Showcase v4 rendered** (`7f4aeba`, owner: "yes start")

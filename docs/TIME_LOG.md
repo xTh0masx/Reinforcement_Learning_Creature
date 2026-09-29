@@ -83,6 +83,15 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | 13:13 – 18:05 | **4.9 h compute** | Rendering both side cameras of showcase v4 (9001 frames each) | frames done |
 | 18:05 – 18:17 | 0.2 h | Side-by-side video assembled | `showcase_side_by_side_v4.mp4` (5:00) |
 
+## Session 6 – 28/29 Sep (showcase without rocks)
+
+| Time | Duration | Step | Result |
+| --- | --- | --- | --- |
+| 28.09 18:18 – 18:25 | 0.1 h | Habitat without rocks, re-recording, rocks deleted in Blender, test stills | `e5d01f1` |
+| 28.09 18:25 – 21:50 | **3.4 h compute** | Rendering both side cameras (to frame ~7300 / ~7100) | paused, laptop closed |
+| 29.09 08:11 – 09:02 | **0.85 h compute** | Render resumed from the existing frames | 9001 frames each |
+| 29.09 09:02 – 09:10 | 0.15 h | Side-by-side video assembled | `showcase_side_by_side_v4_no_rocks.mp4` (5:00) |
+
 ## Compute per training run
 
 | Run | Start → end | Wall time | Steps | Outcome |
@@ -101,6 +110,7 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | myr/dc_legs_v4 | 28.09 11:28 → 12:34 | 1.1 h | 2 × 3M | released |
 | Showcase v3 render | 27.09 14:35 → 18:54 | 4.3 h | 18 002 frames | video |
 | Showcase v4 render | 28.09 13:13 → 18:05 | 4.9 h | 18 002 frames | video |
+| Showcase v4 no-rocks render | 28.09 18:25 → 21:50, 29.09 08:11 → 09:02 | 4.3 h | 18 002 frames | video |
 
 Speeds on this PC (8 CPU cores, no CUDA GPU): walking training ≈ 650–850 steps/s per run with two runs in parallel,
 predator training ≈ 550–650 steps/s per run, EEVEE render ≈ 0.8 frames/s for two cameras in parallel. Everything was
