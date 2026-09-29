@@ -21,15 +21,18 @@ GAITS = {
     "myrranox": (1.5, 3.0, 1.2),
     "dc": (1.2, 2.8, 2.5),
 }
+# Walking v5 (natural style): the DC walks like a panther - slow, long strides (about 1.1 steps/s at 0.8 m/s instead
+# of 1.7); frequency grows with speed^1.5, so the trot still reaches the old top frequency.
+GAITS_STYLE = {"myrranox": (1.5, 3.0, 1.2, 1.0), "dc": (0.8, 2.6, 2.5, 1.5)}   # min Hz, max Hz, v ref, exponent
 FOOT_CLEARANCE = {"myrranox": 0.03, "dc": 0.08}     # m, target swing height of a foot
 STAND_SPEED = 0.05                                  # |v| below this and |w| small -> standing
 
 
-def frequency(species, speed, turn_rate, max_turn_rate):
-    """Step frequency (Hz): grows with speed; turning on the spot also needs steps."""
-    lo, hi, v_ref = GAITS[species]
+def frequency(species, speed, turn_rate, max_turn_rate, style=False):
+    """Step frequency (Hz): grows with speed; turning on the spot also needs steps. style: walking v5 curve."""
+    lo, hi, v_ref, expo = GAITS_STYLE[species] if style else (*GAITS[species], 1.0)
     effort = max(abs(speed) / v_ref, 0.5 * abs(turn_rate) / max_turn_rate)
-    return lo + (hi - lo) * min(1.0, effort)
+    return lo + (hi - lo) * min(1.0, effort) ** expo
 
 
 def pattern(species, leg_names, speed):

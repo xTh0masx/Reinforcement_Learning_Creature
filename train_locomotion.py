@@ -23,15 +23,15 @@ class TrackingCurriculum(BaseCallback):
     """Version 4: narrow the speed / turn tracking tolerance from 1 to `end` between 20 % and 80 % of this run
     (counted from where the run starts, also when resuming)."""
 
-    def __init__(self, steps, end=0.5):
+    def __init__(self, steps, end=0.5, start=1.0):
         super().__init__()
-        self.steps, self.end, self.t0 = steps, end, None
+        self.steps, self.end, self.start, self.t0 = steps, end, start, None
 
     def _on_rollout_start(self):
         if self.t0 is None:
             self.t0 = self.num_timesteps
         frac = min(1.0, max(0.0, ((self.num_timesteps - self.t0) / self.steps - 0.2) / 0.6))
-        scale = 1.0 + (self.end - 1.0) * frac
+        scale = self.start + (self.end - self.start) * frac
         self.training_env.env_method("set_track_scale", scale)
         self.logger.record("train/track_scale", scale)
 
@@ -67,8 +67,11 @@ def main():
     p.add_argument("--resume", default=None, help="models/<run> to continue from")
     p.add_argument("--ckpt-every", type=float, default=250_000)
     p.add_argument("--version", type=int, default=1,
-                   help="1 = original reward, 2 = natural gait + symmetry, 3 = alive body, 4 = precise + fluid")
-    p.add_argument("--track-end", type=float, default=0.5, help="version 4: final tracking tolerance scale")
+                   help="1 = original reward, 2 = natural gait + symmetry, 3 = alive body, 4 = precise + fluid, "
+                        "5 = natural style")
+    p.add_argument("--track-end", type=float, default=0.5, help="version 4+: final tracking tolerance scale")
+    p.add_argument("--track-start", type=float, default=1.0,
+                   help="version 4+: starting tolerance scale (0.5 when continuing a v4 brain)")
     p.add_argument("--sym-weight", type=float, default=1.0, help="mirror-symmetry loss weight (version 2)")
     p.add_argument("--head-weight", type=float, default=1.0,
                    help="scale of the version-3 head steadiness/level penalties (0.1 = ten times weaker)")
@@ -115,7 +118,7 @@ def main():
                               save_vecnormalize=True)
     callbacks = [ckpt, PenaltyCurriculum(int(args.curriculum_total or args.steps), fixed=args.penalty_fixed)]
     if args.version >= 4:
-        callbacks.append(TrackingCurriculum(int(args.steps), end=args.track_end))
+        callbacks.append(TrackingCurriculum(int(args.steps), end=args.track_end, start=args.track_start))
     callbacks = CallbackList(callbacks)
     model.learn(total_timesteps=int(args.steps), tb_log_name=run, callback=callbacks,
                 reset_num_timesteps=not args.resume)
