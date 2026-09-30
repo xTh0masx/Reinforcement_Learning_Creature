@@ -34,7 +34,11 @@ version=6  DC "six-limbed panther" (30 Sep): body with the extra arms as actuate
 version=7  as version 6, but the legs follow a built-in step generator (owner, 30 Sep: "let the DC walk directly"):
            joint target = rest pose + gait-clock reference (reach / push / knee and paw fold, folded arms while
            walking) + the brain's correction (CPG_RESIDUAL rad per action unit). The DC steps on the beat from the
-           first step; the brain learns balance, steering and fine adjustments.
+           first step; the brain learns balance, steering and fine adjustments. (Experiment: the generator alone
+           does not balance the DC.)
+version=8  DC on the mesh-based body (owner, 30 Sep: "enhance the meshes of DC as highly detailed as possible"): every
+           part is a convex hull cut from the real DC mesh (sim/dc_hulls.py), paws with claws are the feet, the
+           mass is distributed by volume. Rules as version 6 (no step generator).
 
 Shared world: pass model/data/prefix to drive one creature inside a bigger MuJoCo world
 (sim/physics_world.py). Then call apply_action(), step the world, and after_physics() - step() does
@@ -88,8 +92,9 @@ TASK_TERMS = ("lin", "ang", "gait", "clearance", "air_time", "style", "register"
 ARM_TUCK = (0.80, 0.20, 0.42)   # version 6: folded claw position in the torso frame (y mirrored per side)
 ANKLE_FOLD = 0.3                # version 6: ankle / wrist fold in mid-swing (rad); flat (no rhythm) in stance
 WEIGHTS[7] = dict(WEIGHTS[6])
+WEIGHTS[8] = dict(WEIGHTS[6])
 CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
-ACTIVE = {7: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
+ACTIVE = {7: {"myrranox": False, "dc": True}, 8: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
           5: {"myrranox": False, "dc": True}, 6: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
 # version 5 leg style per species: (sweep joint index, knee joint index, knee fold rad, max sweep rad)
 STYLE = {"myrranox": (0, 2, 0.8, 0.45), "dc": (1, 2, 0.6, 0.7)}
@@ -105,7 +110,7 @@ COMMAND_RAMP_S = (1.5, 1.0)  # version 4: seconds to ramp from 0 to max speed / 
 def body_for(species, version, passive=False):
     """The body a walking brain of this version controls."""
     if version >= 6 and species == "dc":
-        body = BODIES[species](passive=True, active=True, arms=True)
+        body = BODIES[species](passive=True, active=True, arms=True, hulls=version >= 8)
     elif ACTIVE.get(version, {}).get(species, False):
         body = BODIES[species](passive=True, active=True)
     else:
@@ -163,7 +168,8 @@ class LocomotionEnv(gym.Env):
         self.nlegs = len(self.leg_names)
         self.foot_geoms = np.array([nid(mujoco.mjtObj.mjOBJ_GEOM, n) for n in self.body.foot_names])
         self.foot_sites = np.array([nid(mujoco.mjtObj.mjOBJ_SITE, n) for n in self.body.foot_names])
-        self.foot_radius = m.geom_size[self.foot_geoms, 0]
+        self.foot_radius = np.where(m.geom_type[self.foot_geoms] == mujoco.mjtGeom.mjGEOM_MESH, 0.0,
+                                    m.geom_size[self.foot_geoms, 0])     # mesh paws: the site is on the sole
         self.floor_geom = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "floor")
         self.torso_body = nid(mujoco.mjtObj.mjOBJ_BODY, "torso")
         trunk = [self.torso_body]
@@ -300,7 +306,7 @@ class LocomotionEnv(gym.Env):
         if self.version >= 4:                   # low-pass: the joint targets glide instead of jumping
             self.raw = a
             a = self.last_action + ACTION_FILTER * (a - self.last_action)
-        if self.version >= 7:                   # step generator + the brain's correction
+        if self.version == 7:                   # step generator + the brain's correction
             target = self.rest_joints + self.cpg_targets() + a * CPG_RESIDUAL
         else:
             target = self.rest_joints + a * self.action_scales

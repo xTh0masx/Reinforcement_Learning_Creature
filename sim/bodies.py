@@ -91,6 +91,7 @@ class BodySpec:
     passive: list = field(default_factory=list)     # PassiveChain parts (stage 1 "alive" bodies)
     rear: object = None                              # RearSegment (stage 2 DC spine)
     head_body: str = ""                              # body whose steadiness is rewarded (stage 2)
+    hulls: dict = None      # walking v8 (DC): {bone: {"vertices": body-frame points, "volume": m^3}} from the mesh
 
     @property
     def joint_names(self):
@@ -214,14 +215,17 @@ _DC_ARM_LEFT = [(0.62, 0.20, 0.61), (0.79, 0.19, 0.44), (1.02, 0.20, 0.32), (1.0
 DC_LEG_RADII = {"hind": (0.075, 0.05, 0.04), "front": (0.07, 0.05, 0.04), "arm": (0.055, 0.045, 0.04)}
 
 
-def dc(passive=False, active=False, arms=False):
+def dc(passive=False, active=False, arms=False, hulls=False):
     """passive=True: tail (2 segments), neck + head and the two extra arms on spring-damper joints (stage 1).
     The chain points are the DC_rig bones tail_1/2, neck, head, arm_L/R, so the proxy mesh follows directly.
     active=True (stage 2, walking v3): a spine joint splits the chest - the rear body carries hind legs and tail -
     and spine, neck and head get motors the brain controls; tail and arms stay passive.
     arms=True (walking v6): the extra arms become actuated limbs (shoulder 2, elbow, wrist, claws touch the ground),
-    legs sway sideways only +-8 deg (paws under the body like a panther), segment radii fitted to the mesh."""
+    legs sway sideways only +-8 deg (paws under the body like a panther), segment radii fitted to the mesh.
+    hulls=True (walking v8): every part is a convex hull cut from the real DC mesh (sim/dc_hulls.py) instead of
+    capsules; the paws (with claws) are the feet; the 60 kg are distributed by hull volume."""
     passive = passive or active or arms
+    SR = DC_HULL_SPRINGREF if hulls else DC_SPRINGREF      # spring rest angles for the part masses in use
     active = active or arms
     legs = []
     abd_range = (-8, 8) if arms else (-25, 25)
@@ -250,17 +254,17 @@ def dc(passive=False, active=False, arms=False):
     if passive:
         chains = [
             PassiveChain("tail", [(-0.30, 0, 0.60), (-0.80, 0, 0.50), (-1.35, 0, 0.42)],
-                         [[(PITCH, 60.0, DC_SPRINGREF["tail_p0x"]), (YAW, 25.0, 0.0)],
-                          [(PITCH, 18.0, DC_SPRINGREF["tail_p1x"]), (YAW, 6.0, 0.0)]],
+                         [[(PITCH, 60.0, SR["tail_p0x"]), (YAW, 25.0, 0.0)],
+                          [(PITCH, 18.0, SR["tail_p1x"]), (YAW, 6.0, 0.0)]],
                          masses=[2.5, 1.5], radius=[0.07, 0.05], bones=["tail_1", "tail_2"], damping_ratio=0.15),
             PassiveChain("neck", [(0.50, 0, 0.80), (1.00, 0, 0.90), (1.32, 0, 0.80)],
-                         [[(PITCH, 400.0, DC_SPRINGREF["neck_p0x"]), (YAW, 250.0, 0.0)],
-                          [(PITCH, 60.0, DC_SPRINGREF["neck_p1x"])]],
+                         [[(PITCH, 400.0, SR["neck_p0x"]), (YAW, 250.0, 0.0)],
+                          [(PITCH, 60.0, SR["neck_p1x"])]],
                          masses=[5.0, 4.0], radius=[0.10, 0.12], bones=["neck", "head"]),
         ]
         for side, sgn in (("L", 1), ("R", -1)) if not arms else ():
             chains.append(PassiveChain(f"arm_{side}", [(0.62, 0.20 * sgn, 0.62), (0.98, 0.22 * sgn, 0.24)],
-                                       [[(PITCH, 10.0, DC_SPRINGREF["arm_L_p0x"]), (np.array([1.0, 0, 0]) * sgn, 6.0, 0.0)]],
+                                       [[(PITCH, 10.0, SR["arm_L_p0x"]), (np.array([1.0, 0, 0]) * sgn, 6.0, 0.0)]],
                                        masses=[1.0], radius=[0.05], bones=[f"arm_{side}"], damping_ratio=0.25))
         if active:
             neck = chains[1]
@@ -273,10 +277,15 @@ def dc(passive=False, active=False, arms=False):
             '<geom name="head" type="ellipsoid" pos="1.15 0 0.82" size="0.16 0.09 0.12" mass="4"/>',
             '<geom name="tail" type="capsule" fromto="-0.45 0 0.55 -1.30 0 0.44" size="0.06" mass="4"/>',
         ]
-    return BodySpec("dc", mass=60.0, torso_geoms=torso, legs=legs,
+    hull_data = None
+    if hulls:
+        from sim.dc_hulls import load
+        hull_data = load()
+        torso = []                                   # the torso / rear / neck / tail shapes come from the hulls
+    return BodySpec("dc", mass=60.0, torso_geoms=torso, legs=legs, hulls=hull_data,
                     kp=300.0, max_torque=150.0, joint_damping=3.0, action_scale=0.6, stand_height=0.0, passive=chains,
                     rear=RearSegment("spine", (0.12, 0, 0.70),
-                                     [("px", PITCH, 1500.0, DC_SPRINGREF.get("spine_px", 0.0), 20.0),
+                                     [("px", PITCH, 1500.0, SR.get("spine_px", 0.0), 20.0),
                                       ("py", YAW, 800.0, 0.0, 20.0)],
                                      [((0.0, 0, 0.0), (-0.37, 0, -0.04), 0.21, 17.5)],
                                      ["hind_L", "hind_R"], kp=600.0, max_torque=400.0, action_scale=0.25)
@@ -284,10 +293,57 @@ def dc(passive=False, active=False, arms=False):
                     head_body="neck_s1" if active else "")
 
 
+def _hull_geom(spec, bone, origin, name=None, prefix_mesh=True):
+    """Mesh geom for a hull: vertices relative to the body origin, mass by volume share of the whole body."""
+    h = spec.hulls[bone]
+    total = sum(x["volume"] for x in spec.hulls.values())
+    mass = spec.mass * h["volume"] / total
+    gname = f' name="{name}"' if name else ""
+    return f'<geom{gname} type="mesh" mesh="@MESH@hull_{bone}" mass="{mass:.4f}" class="creature"/>'
+
+
+def hull_origins(spec):
+    """Body-frame origin of the body each hull belongs to (all bodies are unrotated at the rest pose)."""
+    o = {"torso": np.zeros(3)}
+    for leg in spec.legs:
+        for i in range(3):
+            o[f"{leg.name}_s{i}"] = np.asarray(leg.points[i], float)
+    if spec.rear is not None:
+        o[spec.rear.bone] = np.asarray(spec.rear.point, float)
+    for ch in spec.passive:
+        for i, bone in enumerate(ch.bones):
+            o[bone] = np.asarray(ch.points[i], float)
+    return o
+
+
+def creature_assets(spec, prefix=""):
+    """Mesh assets of a creature's hull shapes (empty for capsule bodies)."""
+    if not spec.hulls:
+        return ""
+    origins = hull_origins(spec)
+    out = []
+    for bone, h in spec.hulls.items():
+        if bone not in origins:
+            continue
+        v = np.asarray(h["vertices"]) - origins[bone]
+        out.append(f'<mesh name="{prefix}hull_{bone}" vertex="{" ".join(f"{x:.4f}" for x in v.ravel())}"/>')
+    return "".join(out)
+
+
+def _foot_site(spec, leg):
+    """Lowest point of the paw hull, relative to the paw body (the foot's contact point at rest)."""
+    v = np.asarray(spec.hulls[f"{leg.name}_s2"]["vertices"])
+    return v[np.argmin(v[:, 2])] - np.asarray(leg.points[2], float)
+
+
 # Spring rest angles (deg) that cancel the sag under gravity, so the parts rest in the modelled pose.
 # Found with calibrate_springref() (python -m sim.bodies --springref).
 MYR_SPRINGREF = {"abdomen_p0x": 15.34, "head_p0x": -5.68}
 DC_SPRINGREF = {"spine_px": -1.89, "tail_p0x": 16.85, "tail_p1x": 12.91, "neck_p0x": -5.5, "neck_p1x": -5.85, "arm_L_p0x": -9.19}
+# walking v8 mesh body (heavier neck, rear body with its real volume): calibrate_springref("dc", active=True,
+# arms=True, hulls=True) residuals added to DC_SPRINGREF on 30 Sep 2026
+DC_HULL_SPRINGREF = {"spine_px": -1.44, "tail_p0x": 14.91, "tail_p1x": 8.15, "neck_p0x": -5.59, "neck_p1x": -2.86,
+                     "arm_L_p0x": -9.19}
 
 BODIES = {"myrranox": myrranox, "dc": dc}
 
@@ -296,35 +352,42 @@ def _fmt(v):
     return " ".join(f"{x:.4f}" for x in v)
 
 
-def _passive_xml(ch, offset=(0.0, 0.0, 0.0)):
+def _passive_xml(ch, offset=(0.0, 0.0, 0.0), spec=None):
     """Nested bodies with spring-damper joints (motors, if any, are added as actuators). Damping from the damping
     ratio and a rough inertia. offset: position of the parent body's origin in the body frame."""
     xml, closes = "", ""
     pts = [np.asarray(p, dtype=float) for p in ch.points]
+    masses = list(ch.masses)
+    if spec is not None and spec.hulls:                     # walking v8: the real part masses (by hull volume)
+        total = sum(x["volume"] for x in spec.hulls.values())
+        masses = [spec.mass * spec.hulls[bone]["volume"] / total for bone in ch.bones]
     for i, seg in enumerate(ch.joints):
         origin = pts[i] - (pts[i - 1] if i else np.asarray(offset, dtype=float))
         vec = pts[i + 1] - pts[i]
         length = float(np.linalg.norm(vec))
-        mass_out = sum(ch.masses[i:])                       # this joint carries all segments beyond it
-        inertia = mass_out * (0.5 * length) ** 2 + ch.masses[i] * length ** 2 / 12
+        mass_out = sum(masses[i:])                          # this joint carries all segments beyond it
+        inertia = mass_out * (0.5 * length) ** 2 + masses[i] * length ** 2 / 12
         joints = ""
         for k, (axis, stiff, ref) in enumerate(seg):
             damp = 2 * ch.damping_ratio * np.sqrt(stiff * inertia)
             joints += (f'<joint name="{ch.name}_p{i}{"xyz"[k]}" axis="{_fmt(axis)}" stiffness="{stiff}" '
                        f'springref="{ref}" damping="{damp:.4f}" armature="0.005" limited="true" '
                        f'range="{-ch.range_deg} {ch.range_deg}"/>')
-        xml += (f'<body name="{ch.name}_s{i}" pos="{_fmt(origin)}">{joints}'
-                f'<geom type="capsule" fromto="0 0 0 {_fmt(vec)}" size="{ch.radius[i]}" mass="{ch.masses[i]}" '
-                f'class="creature"/>')
+        if spec is not None and spec.hulls:
+            geom = _hull_geom(spec, ch.bones[i], origin)
+        else:
+            geom = (f'<geom type="capsule" fromto="0 0 0 {_fmt(vec)}" size="{ch.radius[i]}" mass="{ch.masses[i]}" '
+                    f'class="creature"/>')
+        xml += f'<body name="{ch.name}_s{i}" pos="{_fmt(origin)}">{joints}{geom}'
         closes += "</body>"
     return xml + closes
 
 
-def calibrate_springref(species, active=False):
+def calibrate_springref(species, active=False, **body_kwargs):
     """Settle the body with the leg rest pose held and read how far each spring joint sags; springref = -sag.
     Motors of spine/neck/head/abdomen are switched off, so the springs alone carry the weight."""
     import mujoco
-    spec = BODIES[species](passive=True, active=active)
+    spec = BODIES[species](passive=True, active=active, **body_kwargs)
     m = mujoco.MjModel.from_xml_string(build_mjcf(spec))
     n_leg = sum(len(leg.joints) for leg in spec.legs)
     m.actuator_gainprm[n_leg:, 0] = 0.0
@@ -352,11 +415,14 @@ def _prefix_names(xml, prefix):
 
 def start_height(spec):
     """Torso height at which the rest-pose feet just touch the floor."""
-    foot_bottom = min(leg.points[3, 2] - leg.radius * 1.2 for leg in spec.legs if leg.mass_scale == 1.0)
+    if spec.hulls:
+        foot_bottom = min(spec.hulls[f"{leg.name}_s2"]["min"][2] for leg in spec.legs if leg.mass_scale == 1.0)
+    else:
+        foot_bottom = min(leg.points[3, 2] - leg.radius * 1.2 for leg in spec.legs if leg.mass_scale == 1.0)
     return spec.stand_height - foot_bottom + 0.005
 
 
-def _leg_xml(leg, leg_mass, damp, offset=(0.0, 0.0, 0.0)):
+def _leg_xml(leg, leg_mass, damp, offset=(0.0, 0.0, 0.0), spec=None):
     """Nested leg bodies; each segment's body sits at its joint. offset: parent body origin in the body frame."""
     p = leg.points
     xml, closes = "", ""
@@ -366,14 +432,20 @@ def _leg_xml(leg, leg_mass, damp, offset=(0.0, 0.0, 0.0)):
         joints = "".join(f'<joint name="{leg.name}_j{k}" axis="{_fmt(axis)}" range="{lo} {hi}" {damp}/>'
                          for k, (seg, axis, (lo, hi)) in enumerate(leg.joints) if seg == i)
         rad = leg.seg_radius[i] if leg.seg_radius else leg.radius
-        xml += (f'<body name="{leg.name}_s{i}" pos="{_fmt(origin)}">{joints}'
-                f'<geom type="capsule" fromto="{_fmt(seg_from)} {_fmt(seg_to)}" size="{rad}" '
-                f'mass="{leg_mass * leg.mass_scale:.4f}" class="creature"/>')
+        if spec is not None and spec.hulls:
+            geom = _hull_geom(spec, f"{leg.name}_s{i}", origin, name=f"{leg.name}_foot" if i == 2 else None)
+        else:
+            geom = (f'<geom type="capsule" fromto="{_fmt(seg_from)} {_fmt(seg_to)}" size="{rad}" '
+                    f'mass="{leg_mass * leg.mass_scale:.4f}" class="creature"/>')
+        xml += f'<body name="{leg.name}_s{i}" pos="{_fmt(origin)}">{joints}{geom}'
         closes += "</body>"
-    foot = p[3] - p[2]
-    xml += (f'<geom name="{leg.name}_foot" type="sphere" pos="{_fmt(foot)}" size="{leg.radius * 1.2:.4f}" '
-            f'mass="{leg_mass * leg.mass_scale * 0.2:.4f}" friction="1.2 0.02 0.001" class="creature"/>'
-            f'<site name="{leg.name}_foot" pos="{_fmt(foot)}" size="0.01"/>')
+    if spec is not None and spec.hulls:           # the paw hull is the foot; the site marks its lowest point
+        xml += f'<site name="{leg.name}_foot" pos="{_fmt(_foot_site(spec, leg))}" size="0.01"/>'
+    else:
+        foot = p[3] - p[2]
+        xml += (f'<geom name="{leg.name}_foot" type="sphere" pos="{_fmt(foot)}" size="{leg.radius * 1.2:.4f}" '
+                f'mass="{leg_mass * leg.mass_scale * 0.2:.4f}" friction="1.2 0.02 0.001" class="creature"/>'
+                f'<site name="{leg.name}_foot" pos="{_fmt(foot)}" size="0.01"/>')
     return xml + closes
 
 
@@ -386,8 +458,10 @@ def _rear_xml(spec, leg_mass, damp):
                      for sfx, axis, stiff, ref, rng in r.joints)
     geoms = "".join(f'<geom type="capsule" fromto="{_fmt(a)} {_fmt(b)}" size="{rad}" mass="{mass}" class="creature"/>'
                     for a, b, rad, mass in r.geoms)
-    legs = "".join(_leg_xml(leg, leg_mass, damp, pt) for leg in spec.legs if leg.name in r.legs)
-    chains = "".join(_passive_xml(ch, pt) for ch in spec.passive if ch.parent == r.name)
+    legs = "".join(_leg_xml(leg, leg_mass, damp, pt, spec) for leg in spec.legs if leg.name in r.legs)
+    chains = "".join(_passive_xml(ch, pt, spec) for ch in spec.passive if ch.parent == r.name)
+    if spec.hulls:
+        geoms = _hull_geom(spec, r.bone, pt)
     return f'<body name="{r.name}_rear" pos="{_fmt(pt)}">{joints}{geoms}{legs}{chains}</body>'
 
 
@@ -397,10 +471,12 @@ def creature_xml(spec: BodySpec, prefix="", pos=(0.0, 0.0), yaw=0.0, leg_mass_fr
     leg_mass = spec.mass * leg_mass_fraction / sum(leg.mass_scale for leg in spec.legs) / 3
     damp = f'damping="{spec.joint_damping}" armature="0.01" limited="true"'
     rear_legs = set(spec.rear.legs) if spec.rear is not None else set()
-    legs_xml = [_leg_xml(leg, leg_mass, damp) for leg in spec.legs if leg.name not in rear_legs]
+    legs_xml = [_leg_xml(leg, leg_mass, damp, spec=spec) for leg in spec.legs if leg.name not in rear_legs]
 
     torso = [g.replace("<geom ", '<geom class="creature" ') for g in spec.torso_geoms]
-    torso += [_passive_xml(ch) for ch in spec.passive if ch.parent == "torso"]
+    if spec.hulls:
+        torso.append(_hull_geom(spec, "torso", np.zeros(3)))
+    torso += [_passive_xml(ch, spec=spec) for ch in spec.passive if ch.parent == "torso"]
     if spec.rear is not None:
         torso.append(_rear_xml(spec, leg_mass, damp))
     quat = f"{np.cos(yaw / 2):.6f} 0 0 {np.sin(yaw / 2):.6f}"
@@ -410,7 +486,7 @@ def creature_xml(spec: BodySpec, prefix="", pos=(0.0, 0.0), yaw=0.0, leg_mass_fr
     actuators = "".join(
         f'<position name="{prefix}{j}" joint="{prefix}{j}" kp="{kp}" forcerange="{-tq} {tq}"/>'
         for j, (kp, tq, _) in zip(spec.joint_names, spec.actuator_params()))
-    return _prefix_names(body, prefix), actuators
+    return _prefix_names(body, prefix).replace('mesh="@MESH@', f'mesh="{prefix}'), actuators
 
 
 def _habitat_xml(habitat):
@@ -437,11 +513,12 @@ def build_world_mjcf(creatures, habitat=None, name="world"):
     """MJCF world: floor (+ walls and rocks from a Habitat) + several creatures.
     creatures: list of (BodySpec, prefix, (x, y), yaw). Creatures collide with floor and scenery, not with
     each other (contype 2 / conaffinity 1)."""
-    bodies, acts = [], []
+    bodies, acts, meshes = [], [], []
     for spec, prefix, pos, yaw in creatures:
         b, a = creature_xml(spec, prefix, pos, yaw)
         bodies.append(b)
         acts.append(a)
+        meshes.append(creature_assets(spec, prefix))
     return f"""
 <mujoco model="{name}">
   <compiler angle="degree" autolimits="true"/>
@@ -453,6 +530,7 @@ def build_world_mjcf(creatures, habitat=None, name="world"):
   <asset>
     <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1="0.45 0.40 0.33" rgb2="0.36 0.32 0.26"/>
     <material name="grid" texture="grid" texrepeat="1 1" texuniform="true"/>
+    {"".join(meshes)}
   </asset>
   <worldbody>
     <light pos="0 0 5" dir="0 0 -1" directional="true"/>
