@@ -97,7 +97,9 @@ WEIGHTS[7] = dict(WEIGHTS[6])
 WEIGHTS[8] = dict(WEIGHTS[6],
                   # no unnecessary movement (owner, 30 Sep)
                   energy=-0.2,          # (v2-v6: -0.1) every movement that does not help costs twice as much
-                  fidget=-0.5)          # standing command: mean (joint speed)^2 - standing means standing still
+                  fidget=-0.5,          # standing command: mean (joint speed)^2 - standing means standing still
+                  arm_ground=-1.0)      # per folded arm touching the ground (owner: no handstand on front legs + arms)
+MAX_TILT_V8 = 25.0           # deg: a trunk tilted further counts as a fall (the "handstand" had ~20 deg nose down)
 CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
 ACTIVE = {7: {"myrranox": False, "dc": True}, 8: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
           5: {"myrranox": False, "dc": True}, 6: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
@@ -464,6 +466,9 @@ class LocomotionEnv(gym.Env):
                     terms["roll_pitch"] *= track
                     terms["vz"] *= track
                 terms["register"] = w["register"] * self._register(foot_pos, touchdown, standing)
+                if "arm_ground" in w:
+                    idle_arms = self.arm_legs & (np.broadcast_to(np.asarray(duty, dtype=float), (self.nlegs,)) <= 0)
+                    terms["arm_ground"] = w["arm_ground"] * float(np.sum(foot_contact & idle_arms))
                 if "arm_tuck" in w:
                     terms["arm_tuck"] = w["arm_tuck"] * self._arm_tuck(foot_pos, duty)
             else:
@@ -494,7 +499,9 @@ class LocomotionEnv(gym.Env):
         if self.command_steps_left <= 0:
             self._resample_command()
 
-        fallen = grav[2] > -0.5 or d.qpos[self.q0 + 2] < self.stand_z - 0.5 * self._leg_height()
+        max_tilt = MAX_TILT_V8 if self.version >= 8 else 60.0
+        fallen = (grav[2] > -math.cos(math.radians(max_tilt))
+                  or d.qpos[self.q0 + 2] < self.stand_z - 0.5 * self._leg_height())
         terminated = bool(fallen)
         if terminated:
             reward -= 10.0
