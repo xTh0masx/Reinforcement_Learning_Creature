@@ -20,7 +20,7 @@ PROXY_FACES = 40_000
 CLAWS = {  # mesh -> bone (per side) ; None side = torso
     "BackClaw_Front_01": "hind_{}_s2", "BackClaw_Front_02": "hind_{}_s2", "BackClaw_Front_03": "hind_{}_s2",
     "MidClaw_Back": "front_{}_s2", "MidClaw_Front_01": "front_{}_s2", "MidClaw_Front_02": "front_{}_s2",
-    "FrontClaws": "arm_{}",
+    "FrontClaws": "arm_{}_s2",
 }
 HEAD_PARTS = ("UpperTeeth", "LowerTeeth", "Tounge", "Eyes_01", "Eyes_02")
 EXTRA_BONES = [
@@ -60,10 +60,11 @@ def rig(repo_root):
     from rig_common import (add_passive_bones, add_spine, body_frame_matrix, build_armature, split_left_right,
                             store_joint_metadata)
     from sim.bodies import dc
-    spec = dc(passive=True, active=True)             # stage 2: spine joint + actuated neck/head
+    spec = dc(passive=True, active=True, arms=True)  # walking v6: spine, neck/head and the arms as limbs
 
     existing = bpy.data.objects.get(RIG)
     if existing is not None:
+        add_arm_limbs(existing, spec, bpy.data.objects[PROXY])
         store_joint_metadata(existing, spec)
         add_passive_bones(existing, spec)          # tail/neck/head/arm bones exist already; adds their joints
         if add_spine(existing, spec):              # new spine bone -> re-weight the proxy so the back can bend
@@ -92,6 +93,74 @@ def rig(repo_root):
     _attach_parts(arm)
     add_passive_bones(arm, spec)
     return arm
+
+
+def add_arm_limbs(arm, spec, proxy):
+    """Walking v6: replace the single passive arm bone per side by three bones on the physics arm points
+    (arm_<side>_s0..s2 = upper arm, forearm, hand), split the old arm weights along the new bones (smooth blend by
+    distance to each segment), move the claws to the hand bone and switch on volume-preserving skinning.
+    Returns True if the rig was changed."""
+    import numpy as np
+    from mathutils import Vector
+    limbs = [leg for leg in spec.legs if leg.name.startswith("arm")]
+    if not limbs or all(f"{leg.name}_s0" in arm.data.bones for leg in limbs):
+        return False
+    pose_position = arm.data.pose_position
+    arm.data.pose_position = "REST"
+    bpy.context.view_layer.update()
+    # remember the claws' placement before their bone disappears (they would jump to the armature origin)
+    claws = {leg.name: bpy.data.objects.get(f"FrontClaws_{leg.name[-1]}") for leg in limbs}
+    claw_mw = {k: o.matrix_world.copy() for k, o in claws.items() if o is not None}
+    for o in bpy.context.selected_objects:
+        o.select_set(False)
+    bpy.context.view_layer.objects.active = arm
+    arm.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = arm.data.edit_bones
+    for leg in limbs:
+        parent = eb["torso"]
+        for i in range(3):
+            b = eb.new(f"{leg.name}_s{i}")
+            b.head, b.tail = Vector(leg.points[i]), Vector(leg.points[i + 1])
+            b.parent = parent
+            parent = b
+        if leg.name in eb:                              # the old single passive bone
+            eb.remove(eb[leg.name])
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for pb in arm.pose.bones:
+        pb.rotation_mode = "QUATERNION"
+
+    M = proxy.matrix_world
+    for leg in limbs:
+        old = proxy.vertex_groups.get(leg.name)
+        new = [proxy.vertex_groups.get(f"{leg.name}_s{i}") or proxy.vertex_groups.new(name=f"{leg.name}_s{i}")
+               for i in range(3)]
+        if old is None:
+            continue
+        a, b = np.array(leg.points[:3]), np.array(leg.points[1:])
+        for v in proxy.data.vertices:
+            w = next((g.weight for g in v.groups if g.group == old.index), 0.0)
+            if w <= 0:
+                continue
+            p = np.array(M @ v.co)
+            t = np.clip(np.einsum("ij,ij->i", p - a, b - a) / np.einsum("ij,ij->i", b - a, b - a), 0, 1)
+            dist = np.linalg.norm(p - (a + t[:, None] * (b - a)), axis=1)
+            share = np.exp(-((dist - dist.min()) / 0.04) ** 2)
+            share /= share.sum()
+            for g, s in zip(new, share):
+                if s > 1e-3:
+                    g.add([v.index], float(w * s), "ADD")
+        proxy.vertex_groups.remove(old)
+        if leg.name in claw_mw:
+            o = claws[leg.name]
+            o.parent, o.parent_type, o.parent_bone = arm, "BONE", f"{leg.name}_s2"
+            bpy.context.view_layer.update()
+            o.matrix_world = claw_mw[leg.name]
+    for m in proxy.modifiers:
+        if m.type == "ARMATURE":
+            m.use_deform_preserve_volume = True       # no shrinking / rubber look where limbs bend
+    arm.data.pose_position = pose_position
+    return True
 
 
 def bind(proxy, arm):

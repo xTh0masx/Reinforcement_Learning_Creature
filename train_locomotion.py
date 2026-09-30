@@ -39,6 +39,26 @@ class TrackingCurriculum(BaseCallback):
         return True
 
 
+class StuckJoints(BaseCallback):
+    """Warn when a joint's mean command drifts beyond the action limit (clipped -> no learning signal; this froze the
+    Myrranox knees in v2-v4). Logs the number of stuck joints and prints their names."""
+
+    def __init__(self, names, limit=1.0):
+        super().__init__()
+        self.names, self.limit, self.last = names, limit, ()
+
+    def _on_rollout_end(self):
+        mean = self.model.rollout_buffer.actions.reshape(-1, len(self.names)).mean(0)
+        stuck = tuple(n for n, m in zip(self.names, mean) if abs(m) > self.limit)
+        self.logger.record("train/stuck_joints", len(stuck))
+        if stuck != self.last:
+            print(f"stuck joints at {self.num_timesteps}: {', '.join(stuck) or 'none'}", flush=True)
+            self.last = stuck
+
+    def _on_step(self):
+        return True
+
+
 class PenaltyCurriculum(BaseCallback):
     """Scale the smoothness/effort penalties from `start` to 1 over the first `ramp` fraction of training,
     so the brain first discovers walking and then learns to walk cleanly."""
@@ -118,7 +138,8 @@ def main():
         env.save(f"checkpoints/{run}_vecnormalize_0_steps.pkl")
     ckpt = CheckpointCallback(max(int(args.ckpt_every) // args.envs, 1), "checkpoints/", name_prefix=run,
                               save_vecnormalize=True)
-    callbacks = [ckpt, PenaltyCurriculum(int(args.curriculum_total or args.steps), fixed=args.penalty_fixed)]
+    callbacks = [ckpt, PenaltyCurriculum(int(args.curriculum_total or args.steps), fixed=args.penalty_fixed),
+                 StuckJoints(LocomotionEnv(args.species, version=args.version).body.joint_names)]
     if args.version >= 4:
         callbacks.append(TrackingCurriculum(int(args.steps), end=args.track_end, start=args.track_start))
     callbacks = CallbackList(callbacks)

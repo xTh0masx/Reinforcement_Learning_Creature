@@ -26,6 +26,11 @@ version=5  natural style (29 Sep): as version 4, plus a leg rhythm per species f
            mostly exempt from the energy / joint-acceleration penalties (in v2-v4 they froze the Myrranox knee).
            DC: long, slow panther strides (lower step frequency), hind paw placed into the front paw's print
            ("register"), tail and extra arms damped harder (less jelly), steady trunk (STEADY_TRUNK_V5).
+version=6  DC "six-limbed panther" (30 Sep): body with the extra arms as actuated limbs, legs +-8 deg sideways, mesh-
+           fitted segment radii (sim/bodies.py dc(arms=True)). Walk / trot on four legs with the arms folded against
+           the chest ("arm_tuck"), from 1.4 m/s the arms join the run (sim/gaits.py). Ankles / wrists join the leg
+           rhythm (paws flat in stance, no flicking). Stricter rhythm and fluency weights (gait, air time, joint
+           acceleration, action rate, "surge" = speeding up / slowing down within a stride).
 
 Shared world: pass model/data/prefix to drive one creature inside a bigger MuJoCo world
 (sim/physics_world.py). Then call apply_action(), step the world, and after_physics() - step() does
@@ -67,9 +72,19 @@ WEIGHTS[4] = dict(WEIGHTS[3],
 WEIGHTS[5] = dict(WEIGHTS[4],
                   style=0.8,            # leg rhythm: exp(-mean(joint error)^2 / 0.35^2) against the gait-clock reference
                   register=0.3)         # DC, per hind touchdown: hind paw near the same-side front paw's last print
-TASK_TERMS = ("lin", "ang", "gait", "clearance", "air_time", "style", "register")
+WEIGHTS[6] = dict(WEIGHTS[5],
+                  arm_tuck=0.4,         # arms not in the gait: claws folded near the chest
+                  # stricter rhythm and fluency (owner, 30 Sep): v5c walked with 15 % step-timing variation
+                  gait=2.0,             # contacts on the beat of the gait clock (v2-v5: 1.0)
+                  air_time=1.0,         # full swings, no taps / double steps (v2-v5: 0.5)
+                  joint_acc=-0.15,      # (v2-v5: -0.05)
+                  action_rate=-0.1,     # (v2-v5: -0.05)
+                  surge=-0.2)           # ((forward acceleration) / 2 m/s^2)^2: no speeding up and slowing down per stride
+TASK_TERMS = ("lin", "ang", "gait", "clearance", "air_time", "style", "register", "arm_tuck")
+ARM_TUCK = (0.80, 0.20, 0.42)   # version 6: folded claw position in the torso frame (y mirrored per side)
+ANKLE_FOLD = 0.3                # version 6: ankle / wrist fold in mid-swing (rad); flat (no rhythm) in stance
 ACTIVE = {3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
-          5: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
+          5: {"myrranox": False, "dc": True}, 6: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
 # version 5 leg style per species: (sweep joint index, knee joint index, knee fold rad, max sweep rad)
 STYLE = {"myrranox": (0, 2, 0.8, 0.45), "dc": (1, 2, 0.6, 0.7)}
 KNEE_EFFORT = 0.25           # version 5: the knee pays a quarter of the energy / joint-acceleration penalty
@@ -83,7 +98,9 @@ COMMAND_RAMP_S = (1.5, 1.0)  # version 4: seconds to ramp from 0 to max speed / 
 
 def body_for(species, version, passive=False):
     """The body a walking brain of this version controls."""
-    if ACTIVE.get(version, {}).get(species, False):
+    if version >= 6 and species == "dc":
+        body = BODIES[species](passive=True, active=True, arms=True)
+    elif ACTIVE.get(version, {}).get(species, False):
         body = BODIES[species](passive=True, active=True)
     else:
         body = BODIES[species](passive=passive or version >= 4)
@@ -136,6 +153,7 @@ class LocomotionEnv(gym.Env):
         self.q0, self.v0 = int(m.jnt_qposadr[root]), int(m.jnt_dofadr[root])     # free joint: pos 3 + quat 4
 
         self.leg_names = [leg.name for leg in self.body.legs]
+        self.is_leg = np.array([leg.mass_scale == 1.0 for leg in self.body.legs])     # False: the DC's arms
         self.nlegs = len(self.leg_names)
         self.foot_geoms = np.array([nid(mujoco.mjtObj.mjOBJ_GEOM, n) for n in self.body.foot_names])
         self.foot_sites = np.array([nid(mujoco.mjtObj.mjOBJ_SITE, n) for n in self.body.foot_names])
@@ -204,6 +222,7 @@ class LocomotionEnv(gym.Env):
         self.phase = float(rng.uniform())
         self.air_time = np.zeros(self.nlegs)
         self.prev_contact = np.ones(self.nlegs, dtype=bool)
+        self.prev_vx = 0.0
         if self.version >= 5:
             self.last_print = np.full((self.nlegs, 2), np.nan)
             self.q_mean = self.data.qpos[self.joint_qpos].copy()
@@ -259,6 +278,8 @@ class LocomotionEnv(gym.Env):
         standing = gaits.is_standing(v, w)
         leg_phase = (self.phase + offsets) % 1.0
         stance = np.ones(self.nlegs, dtype=bool) if standing else leg_phase < duty
+        if standing and np.ndim(duty):           # six limbs: the arms stay folded while standing
+            stance &= self.is_leg
         return leg_phase, stance, duty, f, standing
 
     def step(self, action):
@@ -355,13 +376,17 @@ class LocomotionEnv(gym.Env):
             touchdown = foot_contact & ~self.prev_contact
             if "landing" in w:
                 terms["landing"] = w["landing"] * float(np.sum(np.minimum(foot_vel3[touchdown, 2] ** 2, 4.0)))
-            t_swing = (1 - duty) / f
+            t_swing = np.broadcast_to((1 - np.asarray(duty)) / f, (self.nlegs,))
             if not standing and touchdown.any():
-                terms["air_time"] = w["air_time"] * float(np.sum(np.minimum(self.air_time[touchdown] / t_swing, 1.0) - 0.5))
+                terms["air_time"] = w["air_time"] * float(np.sum(np.minimum(self.air_time[touchdown] / t_swing[touchdown], 1.0) - 0.5))
             else:
                 terms["air_time"] = 0.0
             self.air_time = np.where(foot_contact, 0.0, self.air_time + CONTROL_DT)
             self.prev_contact = foot_contact.copy()
+            if "surge" in w:
+                ax = (lin[0] - self.prev_vx) / CONTROL_DT
+                terms["surge"] = w["surge"] * min((ax / 2.0) ** 2, 1.0)   # capped: untrained jitter must not swamp the task
+            self.prev_vx = float(lin[0])
             if self.version >= 5:                   # the knee may work (lesson: the penalties froze it)
                 ew = self.effort_weight
                 terms["energy"] = w["energy"] * float(np.sum(ew * np.abs(d.actuator_force[self.act_ids] * qvel))) / self.power_ref
@@ -372,6 +397,8 @@ class LocomotionEnv(gym.Env):
                     terms["roll_pitch"] *= track
                     terms["vz"] *= track
                 terms["register"] = w["register"] * self._register(foot_pos, touchdown, standing)
+                if "arm_tuck" in w:
+                    terms["arm_tuck"] = w["arm_tuck"] * self._arm_tuck(foot_pos, duty)
             else:
                 terms["energy"] = w["energy"] * power / self.power_ref
                 terms["joint_acc"] = w["joint_acc"] * float(np.mean((qacc / 500.0) ** 2))
@@ -444,6 +471,22 @@ class LocomotionEnv(gym.Env):
         self.effort_weight[self.knee_idx] = KNEE_EFFORT
         self.front_of = {i: self.leg_names.index(n.replace("hind", "front"))
                          for i, n in enumerate(self.leg_names) if n.startswith("hind")}
+        # version 6: ankles / wrists (4th joint of a limb) join the rhythm; fold direction measured like the knee
+        self.ankle_idx, self.ankle_dir = np.array([], dtype=int), np.array([])
+        if self.version >= 6 and nj >= 4:
+            self.ankle_idx = np.array([i * nj + 3 for i in range(self.nlegs)])
+            dirs = []
+            for i in range(self.nlegs):
+                qa = self.joint_qpos[self.ankle_idx[i]]
+                d.qpos[qa] += 0.05
+                moved = foot_body()[i]
+                d.qpos[qa] -= 0.05
+                dirs.append(-np.sign(np.linalg.norm(moved - hips[i]) - np.linalg.norm(base[i] - hips[i])))
+            self.ankle_dir = np.array(dirs)
+            foot_body()
+        self.arm_legs = np.array([n.startswith("arm") for n in self.leg_names])
+        self.tuck_target = np.array([[ARM_TUCK[0], ARM_TUCK[1] * np.sign(leg.points[0, 1]), ARM_TUCK[2]]
+                                     for leg in self.body.legs])
         self.last_print = np.full((self.nlegs, 2), np.nan)
 
     def style_reference(self, leg_phase, duty, f, standing):
@@ -451,13 +494,16 @@ class LocomotionEnv(gym.Env):
         if standing:
             return None
         v = self.command[0]
+        duty = np.broadcast_to(np.asarray(duty, dtype=float), (self.nlegs,))
+        active = duty > 0                                            # six limbs: folded arms have no rhythm
         stride = abs(v) * duty / f                                   # stance foot travel that matches the speed
         amp = np.minimum(stride / 2 / self.sweep_gain, self.max_sweep) * np.sign(v)
         in_stance = leg_phase < duty
-        p = np.where(in_stance, leg_phase / duty, (leg_phase - duty) / (1 - duty))
+        p = np.where(in_stance, leg_phase / np.maximum(duty, 1e-6), (leg_phase - duty) / (1 - duty))
         fwd = np.where(in_stance, 1 - 2 * p, -np.cos(np.pi * p))    # stance: front -> back, swing: back -> front
-        fold = (np.where(in_stance, 0.0, np.sin(np.pi * p)) - (1 - duty) * 2 / np.pi) * self.knee_fold  # zero mean
-        return amp * fwd * self.sweep_dir, fold * self.knee_dir
+        swing_bump = (np.where(in_stance, 0.0, np.sin(np.pi * p)) - (1 - duty) * 2 / np.pi) * active  # zero mean
+        self.ankle_ref = swing_bump * ANKLE_FOLD * self.ankle_dir if len(self.ankle_idx) else None
+        return amp * fwd * self.sweep_dir, swing_bump * self.knee_fold * self.knee_dir
 
     def _style(self, leg_phase, duty, f, standing):
         # Rhythm, not posture: compare each joint's swing around its own running mean (1 s), so the brain keeps
@@ -471,7 +517,19 @@ class LocomotionEnv(gym.Env):
         err = np.concatenate([q[self.sweep_idx] - ref[0], q[self.knee_idx] - ref[1]])
         if abs(self.command[0]) < 0.1:                                # turning on the spot: knees only
             err = q[self.knee_idx] - ref[1]
+        if self.ankle_ref is not None:                                # version 6: paws flat, no flicking
+            err = np.concatenate([err, q[self.ankle_idx] - self.ankle_ref])
         return math.exp(-float(np.mean(err ** 2)) / 0.35 ** 2)
+
+    def _arm_tuck(self, foot_pos, duty):
+        """Version 6: arms that are not part of the gait keep their claws folded near the chest."""
+        idle = self.arm_legs & (np.broadcast_to(np.asarray(duty, dtype=float), (self.nlegs,)) <= 0)
+        if not idle.any():
+            return 0.0
+        R = self.data.xmat[self.torso_body].reshape(3, 3)
+        rel = (foot_pos[idle] - self.data.xpos[self.torso_body]) @ R
+        dist = np.linalg.norm(rel - self.tuck_target[idle], axis=1)
+        return float(np.mean(np.exp(-(dist / 0.25) ** 2)))
 
     def _register(self, foot_pos, touchdown, standing):
         """Panther walk: each hind paw lands close to where the front paw of the same side last stood."""
@@ -495,7 +553,7 @@ class LocomotionEnv(gym.Env):
         self.track_scale = float(scale)
 
     def _leg_height(self):
-        return float(np.mean([leg.points[0, 2] for leg in self.body.legs]))
+        return float(np.mean([leg.points[0, 2] for leg in self.body.legs if leg.mass_scale == 1.0]))
 
     def obs_layout(self):
         """Slices of the observation vector (used by sim/symmetry.py)."""

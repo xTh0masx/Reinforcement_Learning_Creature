@@ -20,6 +20,9 @@ class Leg:
     points: np.ndarray          # (4, 3): segment 0/1/2 start points and the foot tip - in the body frame
     joints: list                # (segment, axis (body frame), (lo, hi) degrees); several per segment allowed
     radius: float
+    seg_radius: tuple = None    # per-segment capsule radius (fitted to the mesh); default: radius
+    mass_scale: float = 1.0     # segment mass relative to a leg (the DC's arms are lighter)
+    action_scale: float = None  # rad per action unit for this limb's joints; default: the body's
 
     def joint_names(self):
         return [f"{self.name}_j{k}" for k in range(len(self.joints))]
@@ -99,7 +102,7 @@ class BodySpec:
 
     def actuator_params(self):
         """Per actuated joint: (kp, max torque, action scale rad), same order as joint_names."""
-        out = [(self.kp, self.max_torque, self.action_scale) for leg in self.legs for _ in leg.joints]
+        out = [(self.kp, self.max_torque, leg.action_scale or self.action_scale) for leg in self.legs for _ in leg.joints]
         if self.rear is not None:
             out += [(self.rear.kp, self.rear.max_torque, self.rear.action_scale)] * len(self.rear.joints)
         for ch in self.passive:
@@ -205,20 +208,39 @@ _DC_LEFT = {
 }
 
 
-def dc(passive=False, active=False):
+# DC walking v6 ("six-limbed panther"): the extra arms as real limbs - points traced along the DC mesh arm
+# (shoulder, elbow, wrist, claw tip), measured on DC_body_proxy on 30 Sep 2026
+_DC_ARM_LEFT = [(0.62, 0.20, 0.61), (0.79, 0.19, 0.44), (1.02, 0.20, 0.32), (1.04, 0.20, 0.17)]
+DC_LEG_RADII = {"hind": (0.075, 0.05, 0.04), "front": (0.07, 0.05, 0.04), "arm": (0.055, 0.045, 0.04)}
+
+
+def dc(passive=False, active=False, arms=False):
     """passive=True: tail (2 segments), neck + head and the two extra arms on spring-damper joints (stage 1).
     The chain points are the DC_rig bones tail_1/2, neck, head, arm_L/R, so the proxy mesh follows directly.
     active=True (stage 2, walking v3): a spine joint splits the chest - the rear body carries hind legs and tail -
-    and spine, neck and head get motors the brain controls; tail and arms stay passive."""
-    passive = passive or active
+    and spine, neck and head get motors the brain controls; tail and arms stay passive.
+    arms=True (walking v6): the extra arms become actuated limbs (shoulder 2, elbow, wrist, claws touch the ground),
+    legs sway sideways only +-8 deg (paws under the body like a panther), segment radii fitted to the mesh."""
+    passive = passive or active or arms
+    active = active or arms
     legs = []
+    abd_range = (-8, 8) if arms else (-25, 25)
     for pair, pts in _DC_LEFT.items():
         for side, sgn in (("L", 1), ("R", -1)):
             p = np.array(pts) if sgn > 0 else _mirror(pts)
             abd = np.array([1.0, 0, 0]) * sgn          # positive = leg outward
             pitch = np.array([0, 1.0, 0])              # positive = foot backwards
-            legs.append(Leg(f"{pair}_{side}", p, [(0, abd, (-25, 25)), (0, pitch, (-60, 60)),
-                                                  (1, pitch, (-70, 70)), (2, pitch, (-60, 60))], 0.045))
+            legs.append(Leg(f"{pair}_{side}", p, [(0, abd, abd_range), (0, pitch, (-60, 60)),
+                                                  (1, pitch, (-70, 70)), (2, pitch, (-60, 60))], 0.045,
+                            seg_radius=DC_LEG_RADII[pair] if arms else None))
+    if arms:
+        for side, sgn in (("L", 1), ("R", -1)):
+            p = np.array(_DC_ARM_LEFT) if sgn > 0 else _mirror(_DC_ARM_LEFT)
+            abd = np.array([1.0, 0, 0]) * sgn
+            pitch = np.array([0, 1.0, 0])
+            legs.append(Leg(f"arm_{side}", p, [(0, abd, (-15, 15)), (0, pitch, (-100, 80)),
+                                               (1, pitch, (-110, 110)), (2, pitch, (-90, 90))], 0.04,
+                            seg_radius=DC_LEG_RADII["arm"], mass_scale=0.5, action_scale=1.0))
     torso = [
         '<geom name="chest" type="capsule" fromto="-0.25 0 0.66 0.50 0 0.74" size="0.21" mass="35"/>',
     ]
@@ -236,7 +258,7 @@ def dc(passive=False, active=False):
                           [(PITCH, 60.0, DC_SPRINGREF["neck_p1x"])]],
                          masses=[5.0, 4.0], radius=[0.10, 0.12], bones=["neck", "head"]),
         ]
-        for side, sgn in (("L", 1), ("R", -1)):
+        for side, sgn in (("L", 1), ("R", -1)) if not arms else ():
             chains.append(PassiveChain(f"arm_{side}", [(0.62, 0.20 * sgn, 0.62), (0.98, 0.22 * sgn, 0.24)],
                                        [[(PITCH, 10.0, DC_SPRINGREF["arm_L_p0x"]), (np.array([1.0, 0, 0]) * sgn, 6.0, 0.0)]],
                                        masses=[1.0], radius=[0.05], bones=[f"arm_{side}"], damping_ratio=0.25))
@@ -330,7 +352,7 @@ def _prefix_names(xml, prefix):
 
 def start_height(spec):
     """Torso height at which the rest-pose feet just touch the floor."""
-    foot_bottom = min(leg.points[3, 2] - leg.radius * 1.2 for leg in spec.legs)
+    foot_bottom = min(leg.points[3, 2] - leg.radius * 1.2 for leg in spec.legs if leg.mass_scale == 1.0)
     return spec.stand_height - foot_bottom + 0.005
 
 
@@ -343,13 +365,14 @@ def _leg_xml(leg, leg_mass, damp, offset=(0.0, 0.0, 0.0)):
         seg_from, seg_to = np.zeros(3), p[i + 1] - p[i]
         joints = "".join(f'<joint name="{leg.name}_j{k}" axis="{_fmt(axis)}" range="{lo} {hi}" {damp}/>'
                          for k, (seg, axis, (lo, hi)) in enumerate(leg.joints) if seg == i)
+        rad = leg.seg_radius[i] if leg.seg_radius else leg.radius
         xml += (f'<body name="{leg.name}_s{i}" pos="{_fmt(origin)}">{joints}'
-                f'<geom type="capsule" fromto="{_fmt(seg_from)} {_fmt(seg_to)}" size="{leg.radius}" '
-                f'mass="{leg_mass:.4f}" class="creature"/>')
+                f'<geom type="capsule" fromto="{_fmt(seg_from)} {_fmt(seg_to)}" size="{rad}" '
+                f'mass="{leg_mass * leg.mass_scale:.4f}" class="creature"/>')
         closes += "</body>"
     foot = p[3] - p[2]
     xml += (f'<geom name="{leg.name}_foot" type="sphere" pos="{_fmt(foot)}" size="{leg.radius * 1.2:.4f}" '
-            f'mass="{leg_mass * 0.2:.4f}" friction="1.2 0.02 0.001" class="creature"/>'
+            f'mass="{leg_mass * leg.mass_scale * 0.2:.4f}" friction="1.2 0.02 0.001" class="creature"/>'
             f'<site name="{leg.name}_foot" pos="{_fmt(foot)}" size="0.01"/>')
     return xml + closes
 
@@ -371,7 +394,7 @@ def _rear_xml(spec, leg_mass, damp):
 def creature_xml(spec: BodySpec, prefix="", pos=(0.0, 0.0), yaw=0.0, leg_mass_fraction=0.25):
     """(body XML, actuator XML) for one creature. All names get `prefix`, so several creatures fit in one world.
     The creature's own defaults (joint damping, collision classes) are set on its elements."""
-    leg_mass = spec.mass * leg_mass_fraction / len(spec.legs) / 3
+    leg_mass = spec.mass * leg_mass_fraction / sum(leg.mass_scale for leg in spec.legs) / 3
     damp = f'damping="{spec.joint_damping}" armature="0.01" limited="true"'
     rear_legs = set(spec.rear.legs) if spec.rear is not None else set()
     legs_xml = [_leg_xml(leg, leg_mass, damp) for leg in spec.legs if leg.name not in rear_legs]

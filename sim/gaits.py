@@ -15,6 +15,10 @@ import numpy as np
 TRIPOD = {"front_L": 0.0, "mid_R": 0.0, "back_L": 0.0, "front_R": 0.5, "mid_L": 0.5, "back_R": 0.5}
 DC_WALK = {"hind_L": 0.0, "front_L": 0.25, "hind_R": 0.5, "front_R": 0.75}
 DC_TROT = {"hind_L": 0.0, "front_L": 0.5, "hind_R": 0.5, "front_R": 1.0}   # front_R 1.0 == 0.0, kept for blending
+# DC walking v6 (six limbs): the arms stay folded while walking and join the run from ARMS_FROM m/s, landing a quarter
+# cycle after the trot pairs (mirror-compatible: arm_L 0.25 <-> arm_R 0.75), so something touches down every quarter.
+DC_ARMS = {"arm_L": 0.25, "arm_R": 0.75}
+ARMS_FROM, ARMS_FULL, ARM_DUTY = 1.4, 1.8, 0.35
 
 GAITS = {
     # species: (min Hz, max Hz, reference speed for max Hz)
@@ -40,9 +44,17 @@ def pattern(species, leg_names, speed):
     if species == "myrranox":
         return np.array([TRIPOD[n] for n in leg_names]), 0.55
     b = float(np.clip((abs(speed) - 1.0) / 0.6, 0.0, 1.0))    # 0 = walk, 1 = trot
-    walk = np.array([DC_WALK[n] for n in leg_names])
-    trot = np.array([DC_TROT[n] for n in leg_names])
-    return (1 - b) * walk + b * trot, (1 - b) * 0.65 + b * 0.45
+    legs = [n for n in leg_names if n in DC_WALK]
+    walk = np.array([DC_WALK[n] for n in legs])
+    trot = np.array([DC_TROT[n] for n in legs])
+    duty = (1 - b) * 0.65 + b * 0.45
+    if len(legs) == len(leg_names):
+        return (1 - b) * walk + b * trot, duty
+    # six limbs: per-limb duty; arms 0 (never on the ground) while walking, ARM_DUTY in the run
+    a = float(np.clip((abs(speed) - ARMS_FROM) / (ARMS_FULL - ARMS_FROM), 0.0, 1.0))
+    offsets = np.array([(1 - b) * DC_WALK[n] + b * DC_TROT[n] if n in DC_WALK else DC_ARMS[n] for n in leg_names])
+    duties = np.array([duty if n in DC_WALK else a * ARM_DUTY for n in leg_names])
+    return offsets, duties
 
 
 def is_standing(speed, turn_rate):
