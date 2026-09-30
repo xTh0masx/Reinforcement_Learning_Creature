@@ -25,7 +25,7 @@ version=5  natural style (29 Sep): as version 4, plus a leg rhythm per species f
            swing around each joint's running mean, so the posture stays free. The knee is
            mostly exempt from the energy / joint-acceleration penalties (in v2-v4 they froze the Myrranox knee).
            DC: long, slow panther strides (lower step frequency), hind paw placed into the front paw's print
-           ("register"), tail and extra arms damped harder (less jelly).
+           ("register"), tail and extra arms damped harder (less jelly), steady trunk (STEADY_TRUNK_V5).
 
 Shared world: pass model/data/prefix to drive one creature inside a bigger MuJoCo world
 (sim/physics_world.py). Then call apply_action(), step the world, and after_physics() - step() does
@@ -74,6 +74,9 @@ ACTIVE = {3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
 STYLE = {"myrranox": (0, 2, 0.8, 0.45), "dc": (1, 2, 0.6, 0.7)}
 KNEE_EFFORT = 0.25           # version 5: the knee pays a quarter of the energy / joint-acceleration penalty
 PASSIVE_DAMPING_V5 = {"dc": {"tail": 0.5, "arm_L": 0.5, "arm_R": 0.5}}   # damping ratio (v1-v4: 0.15 / 0.25)
+# version 5 steady trunk (owner, 29 Sep: "DC does not look stable"): the long strides made the torso rock and bounce;
+# these weights replace roll_pitch / vz and are paid in proportion to the command tracking (like the head terms)
+STEADY_TRUNK_V5 = {"dc": dict(roll_pitch=-0.5, vz=-1.5)}
 ACTION_FILTER = 0.5          # version 4: target += 0.5 * (action - target) every 20 ms, about 5.5 Hz cut-off
 COMMAND_RAMP_S = (1.5, 1.0)  # version 4: seconds to ramp from 0 to max speed / max turn rate (half the commands)
 
@@ -101,6 +104,8 @@ class LocomotionEnv(gym.Env):
         self.body = body_for(species, version, passive)     # passive=True: tail/abdomen/head/arms on springs
         self.version = version
         self.w = dict(WEIGHTS[version])
+        if version >= 5:
+            self.w.update(STEADY_TRUNK_V5.get(species, {}))
         for k in ("head_steady", "head_level"):              # scale of the v3 head penalties (train_locomotion.py)
             if k in self.w:
                 self.w[k] *= head_weight
@@ -361,6 +366,10 @@ class LocomotionEnv(gym.Env):
                 terms["energy"] = w["energy"] * float(np.sum(ew * np.abs(d.actuator_force[self.act_ids] * qvel))) / self.power_ref
                 terms["joint_acc"] = w["joint_acc"] * float(np.mean(ew * (qacc / 500.0) ** 2))
                 terms["style"] = w["style"] * self._style(leg_phase, duty, f, standing)
+                if self.species_name in STEADY_TRUNK_V5:  # steady trunk, not dodged by standing still
+                    track = math.exp(-lin_err / sig_v ** 2)
+                    terms["roll_pitch"] *= track
+                    terms["vz"] *= track
                 terms["register"] = w["register"] * self._register(foot_pos, touchdown, standing)
             else:
                 terms["energy"] = w["energy"] * power / self.power_ref

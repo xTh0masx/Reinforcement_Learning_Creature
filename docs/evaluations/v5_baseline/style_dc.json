@@ -1,0 +1,36 @@
+[
+  {
+    "brain": "models/dc_legs_v3",
+    "version": 3,
+    "range_of_motion_deg": {
+      "abduction": 4.1,
+      "hip/shoulder": 32.8,
+      "knee/elbow": 43.1,
+      "ankle/wrist": 56.1
+    },
+    "foot_lift_cm": 14.29165549153894,
+    "steps_per_s": 1.8125,
+    "stride_m": 0.4194861783872241,
+    "duty": 0.525,
+    "body_bob_cm": 3.079957909960852,
+    "speed": 0.7603186983268436,
+    "register_cm": 38.125660484774514
+  },
+  {
+    "brain": "models/dc_legs_v4",
+    "version": 4,
+    "range_of_motion_deg": {
+      "abduction": 3.4,
+      "hip/shoulder": 24.7,
+      "knee/elbow": 38.8,
+      "ankle/wrist": 43.3
+    },
+    "foot_lift_cm": 9.975849228433683,
+    "steps_per_s": 1.75,
+    "stride_m": 0.4508095257370925,
+    "duty": 0.475625,
+    "body_bob_cm": 2.5223629557884144,
+    "speed": 0.7889166700399118,
+    "register_cm": 32.95849467233436
+  }
+]
