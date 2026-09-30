@@ -1,0 +1,40 @@
+[
+  {
+    "brain": "models/myr_legs_v4",
+    "version": 4,
+    "head_wobble_rad_s": 1.2998994039617064,
+    "torso_wobble_rad_s": 0.5765339817802799,
+    "head_calmer_than_torso": 0.44352199872019016,
+    "head_tilt_deg": 3.4290921939162784,
+    "joint_swing_deg": {
+      "abdomen_p0x": 1.078245621409907,
+      "abdomen_p0y": 1.033730167483358,
+      "head_p0x": 2.1113495023373483,
+      "head_p0y": 1.748840264591262
+    },
+    "joint_acc_rms": 64.437769271927,
+    "target_jump_deg": 2.318187594076849,
+    "speed_error": 0.05597633549501689,
+    "power_w": 56.808851790806656,
+    "falls": 0
+  },
+  {
+    "brain": "models/myr_legs_v5",
+    "version": 5,
+    "head_wobble_rad_s": 1.403359184043411,
+    "torso_wobble_rad_s": 0.41403969203421875,
+    "head_calmer_than_torso": 0.2950347257793775,
+    "head_tilt_deg": 3.4514295339952072,
+    "joint_swing_deg": {
+      "abdomen_p0x": 1.2853852476855936,
+      "abdomen_p0y": 1.3406136551600354,
+      "head_p0x": 2.44377812574486,
+      "head_p0y": 2.6486414052626204
+    },
+    "joint_acc_rms": 86.46806982580917,
+    "target_jump_deg": 3.3450206815527355,
+    "speed_error": 0.06521778143954798,
+    "power_w": 79.21632700665249,
+    "falls": 0
+  }
+]

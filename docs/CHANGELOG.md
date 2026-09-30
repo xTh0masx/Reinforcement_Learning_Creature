@@ -5,6 +5,20 @@ All changes and owner decisions, newest first. Commit hashes refer to branch `rl
 [predator_training_log.md](predator_training_log.md), [experiments.csv](experiments.csv),
 time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
+## 30 Sep 2026
+
+**Walking v5 – natural style** (`bdb02d8`, `3db4b52`; owner request 29 Sep)
+- `sim/locomotion_env.py` version 5: gait-clock leg rhythm reward (`STYLE`, `style_reference`, measured around each
+  joint's running mean), knee effort relief (`KNEE_EFFORT`), DC panther stride (`gaits.GAITS_STYLE`), paw register
+  reward, damped DC tail / arms (`PASSIVE_DAMPING_V5`), steady trunk (`STEADY_TRUNK_V5`, added after the owner said
+  the DC looked unstable). `train_locomotion.py --track-start`.
+- `unsaturate_brain.py`: frees joints whose command is stuck beyond the action limit (Myrranox knees since v2 2M,
+  DC abduction + front shoulders). `style_metrics.py`: range of motion, stride, foot lift, paw register.
+- Runs: pilots, `myr_legs_v5` (10M), `dc_legs_v5` (stopped at 8.5M, unstable), `dc_legs_v5b` (10.5M). Both runs paused
+  by the owner on 29 Sep 12:50 and resumed on 30 Sep 08:20 from their checkpoints.
+- Result: Myrranox v5 recommended (knee 4.5 → 20°, steadier, better spot turns). DC v5b mixed (panther stride, but
+  head less steady and walking too slowly) → owner decision; the showcase still uses v4 for both.
+
 ## 29 Sep 2026
 
 **Showcase v4 without rocks** (`e5d01f1`, owner: "redo the video but delete the rocks")

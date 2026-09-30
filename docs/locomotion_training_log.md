@@ -35,6 +35,10 @@ speed/turn commands every 2–5 s, 15 % standing), PPO with 8 parallel environme
 | 10 | 28 Sep 2026 | `myr_legs_v4_pilot`, `dc_legs_v4_pilot` | both | 4M → 4.5M (pilot) | **Precise + fluid (v4)**, continued from Myrranox v2 / DC v3: joint targets low-pass filtered (0.5 per 20 ms), tracking tolerance narrowed 1 → 0.5, turn weight 1.0 → 1.5, soft-landing penalty, half the commands ramp, 20 % spot turns / 10 % backwards, head style terms scaled by tracking quality | **Passed** (no stand-still collapse, no falls). Joint acceleration −32 % (Myr) / −25 % (DC); DC turns 30–32 of 36 °/s (v3: 21); Myrranox walks straight (drift 10 → 4 °/s) but still no spot turns (9 of 72 °/s) or backwards → speed reward on spot-turn commands now scaled by turn tracking (standing still earned it in full). `docs/evaluations/v4_pilot/`. |
 | 11 | 28 Sep 2026 | `myr_legs_v4` | Myrranox | 4M → **7M** (continued from `myr_legs_v2`, 1.1 h) | As #10 plus the spot-turn fix (speed reward on spot-turn commands scaled by turn tracking) | **Released.** Turns on the spot for the first time (58 of 72 °/s; v2: 7), walks straight (drift +10 → −1 °/s), full speed on target (1.20 / 1.2; v2 overshot 1.35), turn error 18.6 → 7.9 °/s, joint acceleration −24 %, head wobble −25 %, power −22 %. Still no walking backwards. Midpoint 5.25M already turned on the spot (37 °/s) – the stand-still trap did not come back. |
 | 12 | 28 Sep 2026 | `dc_legs_v4` | DC | 4M → **7M** (continued from `dc_legs_v3`, 1.1 h) | Same as #11 | **Released.** Turns +29 / −32 of ±36 °/s (v3: ±21), speed error 0.13 → 0.08 m/s, turn error 10.7 → 4.6 °/s, joint acceleration −27 %, head tilt 10.7 → 2.4°, power −15 %; trot slightly under the command (2.41 / 2.5; v3 overshot 2.69). Best turning at 5.25M (37–38 °/s) but worse speed there – the final brain is the best overall. |
+| 13 | 29 Sep 2026 | `myr_legs_v5_pilot`, `dc_legs_v5_pilot` | both | 7M → 7.5M (pilot) | **Natural style (v5)** from v4: gait-clock leg rhythm reward, knee effort relief, DC panther stride + paw register + damped tail/arms | DC responded (1.08 steps/s, hip swing 25 → 33°); Myrranox knee still 4.5° → diagnosis: knee command stuck at −1.4 beyond the action limit since v2 2M (also DC abduction + front shoulders) → `unsaturate_brain.py`. |
+| 14 | 29–30 Sep 2026 | `myr_legs_v5` | Myrranox | 7M → **10M** (from `myr_legs_v5_start` = v4 with knees freed; paused 12:50 at 9.75M, resumed next day) | v5 | **Recommended.** Knee 4.5 → 20°, foot lift 9 → 13 cm, torso wobble −29 %, spot turn 58 → 65 °/s, precision unchanged, no falls; power 57 → 79 W. |
+| 15 | 29 Sep 2026 | `dc_legs_v5` | DC | 7M → 8.5M (stopped) | v5 from `dc_legs_v5_start` (abduction + front shoulders freed) | Panther stride (1.22 steps/s, 0.64 m) but the owner saw an unstable body: torso wobble 0.40 → 0.59 rad/s, head tilt 2.4 → 5.9°. Stopped. |
+| 16 | 29–30 Sep 2026 | `dc_legs_v5b` | DC | 8.5M → **10.5M** (paused at 9.25M, resumed) | #15 + steady trunk (roll/pitch −0.5, bounce −1.5, scaled by tracking) | **Mixed.** Torso wobble back to 0.44, strides 0.55 m at 1.12 steps/s, hind paw 26 cm from the front print (v4: 33); but head wobble 0.80 / tilt 7.7° and walk speed 0.62 of 0.8 m/s. No checkpoint as steady as v4 → owner decision. |
 
 Reward values are **not comparable between sessions** — the reward definition changed each time.
 Compare sessions by the evaluation metrics (`metrics.csv`: speed/turn tracking error, falls, foot slip).
@@ -114,6 +118,11 @@ Untested idea: smaller movement ranges for the new Myrranox head/abdomen joints 
    through v1–v3. Scaling it by the turn tracking fixed it within 1.25M steps.
 10. (v4) Smoothness is easier to build in than to reward: a low-pass filter on the joint targets made both bodies
     ~25 % smoother while tracking got better, not worse. Fine-tuning a released brain (3M steps) was enough.
+11. (v5) Watch the raw policy outputs, not only the joint angles: a joint whose mean command drifts beyond the action
+    limit is clipped, gets no learning signal and freezes for good (Myrranox knees from v2 2M on). Shifting the
+    output bias back inside the range revived the knee within one run.
+12. (v5) Style changes shift the body dynamics: longer, slower strides made the DC trunk rock until a steady-trunk
+    term was added - and even then it did not reach v4's calm. Measure steadiness alongside every style change.
 
 ## Walking v4 – precise and fluid (28 Sep 2026)
 
@@ -136,6 +145,52 @@ the action-rate penalty now acts on the brain's raw output. Precise by curriculu
 from 1 to 0.5 between 20 % and 80 % of the run. Measurements: `docs/evaluations/v4/` (`precision_metrics.py`,
 `alive_metrics.py`), baseline `docs/evaluations/v4_baseline/`. Videos: `docs/videos/*_legs_v4_training.mp4`,
 `docs/videos/myr_legs_v2_vs_v4.mp4`, `docs/videos/dc_legs_v3_vs_v4.mp4`.
+
+## Walking v5 – natural style (29–30 Sep 2026)
+
+Owner request (29 Sep): the Myrranox should use its legs like an insect (not stiff), the DC should not look like
+jelly and should move like a panther. Walking v5 (`sim/locomotion_env.py` version 5): a leg rhythm reward from the
+gait clock (each leg reaches forward in the swing and pushes back in stance by the stride the speed needs, the knee
+folds mid-swing; measured around each joint's running mean, so the posture stays free), knee mostly exempt from the
+energy / joint-acceleration penalties, DC: slower step frequency (long panther strides), hind paw into the front
+paw's print, tail and extra arms damped harder (0.15/0.25 → 0.5); after the owner said the DC "does not look stable
+at all", a steady-trunk rule (torso rocking / bouncing 10× more expensive, paid in proportion to the tracking).
+
+**Key finding – stuck joints.** The Myrranox knees had been locked since walking v2 at 2M steps: the brain's knee
+command sat at about −1.4, beyond the action limit (±1), so every sample gave the same target and the knee could not
+learn any more (v2 at 1M: −0.4, knee moving 50°). The same happened to the DC's four abduction joints and its front
+shoulders (hence front legs out of step). `unsaturate_brain.py` shifts the output of stuck joints back inside the
+range (pose barely changes) and widens their exploration; both v5 runs started from such corrected v4 brains.
+
+| Myrranox | v2 at 1M (lively) | v4 | **v5** |
+| --- | --- | --- | --- |
+| Knee range of motion | 50° | 4.5° (locked) | **20°** |
+| Hip swing / leg lift | 30° / 41° | 23° / 19° | 24° / 21° |
+| Foot lift | 16.5 cm | 9 cm | **13 cm** |
+| Torso wobble | – | 0.58 rad/s | **0.41 rad/s** |
+| Turn on the spot (command 72 °/s) | – | 58 °/s | **65 °/s** |
+| Speed error / turn error | – | 0.10 m/s / 7.9 °/s | 0.11 / 7.7 |
+| Power / joint acceleration | – | 57 W / 64 rad/s² | 79 W / 86 rad/s² |
+| Falls | – | 0 | 0 |
+
+| DC | v4 | v5 at 8.5M (no steady trunk) | **v5b (steady trunk)** |
+| --- | --- | --- | --- |
+| Steps per second / stride (walk) | 1.75 / 0.45 m | 1.22 / 0.64 m | **1.12 / 0.55 m** |
+| Hind paw distance to the front print | 33 cm | 32 cm | **26 cm** |
+| Torso wobble | **0.40 rad/s** | 0.59 | 0.44 |
+| Head wobble / head tilt | **0.65 rad/s / 2.4°** | 0.85 / 5.9° | 0.80 / 7.7° |
+| Body bob | **2.5 cm** | 3.6 cm | 3.7 cm |
+| Walk speed (command 0.8) / turns (±36 °/s) | **0.79** / +29 −32 | 0.84 / +33 −31 | 0.62 / +30 −32 |
+| Falls | 0 | 0 | 0 |
+
+Myrranox v5 is better in every respect except power and joint acceleration (the knee works now) – recommended for
+release. DC v5b walks with longer, slower, better-placed steps but rocks its head more and walks too slowly
+(0.62 of 0.8 m/s); no checkpoint of v5 / v5b is as steady as v4 → owner decision after the side-by-side video.
+Measurements: `docs/evaluations/v5/` (`style_metrics.py`, `alive_metrics.py`, `precision_metrics.py`), baseline
+`docs/evaluations/v5_baseline/`. Videos: `docs/videos/myr_legs_v4_vs_v5.mp4`, `docs/videos/dc_legs_v4_vs_v5.mp4`,
+training `docs/videos/myr_legs_v5_training.mp4`, `dc_legs_v5_training.mp4`, `dc_legs_v5b_training.mp4`.
+DC skinning check: 20 % of the proxy vertices are blended between several bones (normal for automatic weights);
+"preserve volume" skinning not yet tried.
 
 ## Next ideas (one change per run)
 

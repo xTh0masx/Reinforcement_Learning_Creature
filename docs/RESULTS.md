@@ -39,6 +39,7 @@ The recorded body pose and joint angles are played back on the rigged models in 
 | 26 Sep | Blender: steady side cameras, overview, panel "Creatures", hunger/fatigue display (owner request) | Clear side view of the leg motion; free viewing of both creatures |
 | 26 Sep | Prey at half speed (owner decision); showcase re-recorded (5 min) | Myrranox catches prey and survives; DC catches 3 |
 | 26 Sep | Showcase rendered side by side (5:00) | `docs/videos/showcase_side_by_side.mp4` |
+| 29–30 Sep | Walking v5 (natural style); stuck joints found and freed | Myrranox knee 4.5 → 20°, steadier; DC panther stride but less steady → owner decision |
 | 29 Sep | Showcase v4 without rocks (owner): rocks removed from physics and Blender, re-recorded | `docs/videos/showcase_side_by_side_v4_no_rocks.mp4` |
 | 28 Sep | Showcase v4: both creatures on walking v4 (DC 6 prey, Myrranox 2, no falls) | `docs/videos/showcase_side_by_side_v4.mp4` |
 | 28 Sep | Walking v4 (precise + fluid) for both, released | Myrranox turns on the spot; DC turns ±30 °/s; ~25 % smoother |
@@ -244,6 +245,52 @@ In the physics habitat (1-min test, `record_world.py`): no falls, both catch pre
 Without rocks (owner, 29 Sep): `docs/videos/showcase_side_by_side_v4_no_rocks.mp4` – rocks removed from the physics world and the Blender scene;
 no falls, Myrranox 3 prey, DC 4 prey.
 
+## 6g. Walking v5 – natural style (29–30 Sep)
+
+Owner request (29 Sep): the Myrranox should use its legs like an insect (not stiff), the DC should not look like
+jelly and should move like a panther. Walking v5 (`sim/locomotion_env.py` version 5): a leg rhythm reward from the
+gait clock (each leg reaches forward in the swing and pushes back in stance by the stride the speed needs, the knee
+folds mid-swing; measured around each joint's running mean, so the posture stays free), knee mostly exempt from the
+energy / joint-acceleration penalties, DC: slower step frequency (long panther strides), hind paw into the front
+paw's print, tail and extra arms damped harder (0.15/0.25 → 0.5); after the owner said the DC "does not look stable
+at all", a steady-trunk rule (torso rocking / bouncing 10× more expensive, paid in proportion to the tracking).
+
+**Key finding – stuck joints.** The Myrranox knees had been locked since walking v2 at 2M steps: the brain's knee
+command sat at about −1.4, beyond the action limit (±1), so every sample gave the same target and the knee could not
+learn any more (v2 at 1M: −0.4, knee moving 50°). The same happened to the DC's four abduction joints and its front
+shoulders (hence front legs out of step). `unsaturate_brain.py` shifts the output of stuck joints back inside the
+range (pose barely changes) and widens their exploration; both v5 runs started from such corrected v4 brains.
+
+| Myrranox | v2 at 1M (lively) | v4 | **v5** |
+| --- | --- | --- | --- |
+| Knee range of motion | 50° | 4.5° (locked) | **20°** |
+| Hip swing / leg lift | 30° / 41° | 23° / 19° | 24° / 21° |
+| Foot lift | 16.5 cm | 9 cm | **13 cm** |
+| Torso wobble | – | 0.58 rad/s | **0.41 rad/s** |
+| Turn on the spot (command 72 °/s) | – | 58 °/s | **65 °/s** |
+| Speed error / turn error | – | 0.10 m/s / 7.9 °/s | 0.11 / 7.7 |
+| Power / joint acceleration | – | 57 W / 64 rad/s² | 79 W / 86 rad/s² |
+| Falls | – | 0 | 0 |
+
+| DC | v4 | v5 at 8.5M (no steady trunk) | **v5b (steady trunk)** |
+| --- | --- | --- | --- |
+| Steps per second / stride (walk) | 1.75 / 0.45 m | 1.22 / 0.64 m | **1.12 / 0.55 m** |
+| Hind paw distance to the front print | 33 cm | 32 cm | **26 cm** |
+| Torso wobble | **0.40 rad/s** | 0.59 | 0.44 |
+| Head wobble / head tilt | **0.65 rad/s / 2.4°** | 0.85 / 5.9° | 0.80 / 7.7° |
+| Body bob | **2.5 cm** | 3.6 cm | 3.7 cm |
+| Walk speed (command 0.8) / turns (±36 °/s) | **0.79** / +29 −32 | 0.84 / +33 −31 | 0.62 / +30 −32 |
+| Falls | 0 | 0 | 0 |
+
+Myrranox v5 is better in every respect except power and joint acceleration (the knee works now) – recommended for
+release. DC v5b walks with longer, slower, better-placed steps but rocks its head more and walks too slowly
+(0.62 of 0.8 m/s); no checkpoint of v5 / v5b is as steady as v4 → owner decision after the side-by-side video.
+Measurements: `docs/evaluations/v5/` (`style_metrics.py`, `alive_metrics.py`, `precision_metrics.py`), baseline
+`docs/evaluations/v5_baseline/`. Videos: `docs/videos/myr_legs_v4_vs_v5.mp4`, `docs/videos/dc_legs_v4_vs_v5.mp4`,
+training `docs/videos/myr_legs_v5_training.mp4`, `dc_legs_v5_training.mp4`, `dc_legs_v5b_training.mp4`.
+DC skinning check: 20 % of the proxy vertices are blended between several bones (normal for automatic weights);
+"preserve volume" skinning not yet tried.
+
 ## 7. Videos and graphs
 
 | File | What it shows |
@@ -263,6 +310,7 @@ no falls, Myrranox 3 prey, DC 4 prey.
 | `videos/showcase_side_by_side_v4_no_rocks.mp4` | **Showcase v4 without rocks, 5:00 (latest)**: both on walking v4, habitat without rocks (`sim/habitat_no_rocks.json`) |
 | `videos/showcase_side_by_side_v4.mp4` | **Showcase v4, 5:00**: both creatures on walking v4 (precise + fluid), rock-dodging side cameras |
 | `videos/showcase_side_by_side_v3.mp4` | **Showcase v3, 5:00**: the same with the alive DC (walking v3) and Myrranox v2 + passive parts; cameras dodge rocks |
+| `videos/myr_legs_v4_vs_v5.mp4`, `videos/dc_legs_v4_vs_v5.mp4`, `videos/*_legs_v5*_training.mp4` | **Walking v5 (natural style)**: insect knees / panther stride before vs after; whole v5 trainings |
 | `videos/*_legs_v4_training.mp4`, `videos/myr_legs_v2_vs_v4.mp4`, `videos/dc_legs_v3_vs_v4.mp4` | **Walking v4 (precise + fluid)**: whole fine-tuning (4M → 7M, every 250k) next to the learning curve; before / after on the same commands |
 | `figures/locomotion/*_legs_v4/`, `figures/gait/*_legs_v4_*` | v4 progress graphs, checkpoint clips, footfall diagrams (incl. Myrranox spot turn `myr_legs_v4_footfall_0.00.png`) |
 | `videos/*_legs_v3_training.mp4`, `videos/*_legs_v2_vs_v3.mp4` | Walking v3 (alive body): whole training; stage 1 vs stage 2 side by side |

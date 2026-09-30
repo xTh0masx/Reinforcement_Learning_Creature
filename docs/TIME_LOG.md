@@ -92,6 +92,18 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | 29.09 08:11 – 09:02 | **0.85 h compute** | Render resumed from the existing frames | 9001 frames each |
 | 29.09 09:02 – 09:10 | 0.15 h | Side-by-side video assembled | `showcase_side_by_side_v4_no_rocks.mp4` (5:00) |
 
+## Session 7 – 29/30 Sep (walking v5)
+
+| Time | Duration | Step | Result |
+| --- | --- | --- | --- |
+| 29.09 09:15 – 09:40 | 0.4 h | Leg measurements (knee locked since v2 2M), v5 implemented, style reward fixed to rhythm | `bdb02d8` |
+| 09:40 – 09:50 | 0.2 h compute | Pilots 0.5M each | DC fine, Myrranox knee still locked |
+| 09:50 – 09:52 | – | Stuck joints diagnosed and freed (`unsaturate_brain.py`) | |
+| 09:52 – 10:48 | 0.9 h compute | `myr_legs_v5`, `dc_legs_v5` | DC unstable (owner) → stopped at 8.5M |
+| 10:48 – 12:50 | 2.0 h compute | `myr_legs_v5` + `dc_legs_v5b` (steady trunk), slower than usual | paused by the owner at 9.75M / 9.25M |
+| 30.09 08:20 – 08:40 | 0.3 h compute | Runs resumed and finished | 10M / 10.5M |
+| 08:40 – 09:10 | 0.5 h | Evaluation, checkpoint scan, videos, graphs, documentation | |
+
 ## Compute per training run
 
 | Run | Start → end | Wall time | Steps | Outcome |
@@ -110,6 +122,8 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | myr/dc_legs_v4 | 28.09 11:28 → 12:34 | 1.1 h | 2 × 3M | released |
 | Showcase v3 render | 27.09 14:35 → 18:54 | 4.3 h | 18 002 frames | video |
 | Showcase v4 render | 28.09 13:13 → 18:05 | 4.9 h | 18 002 frames | video |
+| myr/dc_legs_v5_pilot | 29.09 09:40 → 09:50 | 0.2 h | 2 × 0.5M | DC ok, Myr knee locked |
+| myr_legs_v5, dc_legs_v5, dc_legs_v5b | 29.09 09:52 → 12:50, 30.09 08:20 → 08:40 | 3.3 h | 3M + 1.5M + 2M | Myr recommended, DC mixed |
 | Showcase v4 no-rocks render | 28.09 18:25 → 21:50, 29.09 08:11 → 09:02 | 4.3 h | 18 002 frames | video |
 
 Speeds on this PC (8 CPU cores, no CUDA GPU): walking training ≈ 650–850 steps/s per run with two runs in parallel,
