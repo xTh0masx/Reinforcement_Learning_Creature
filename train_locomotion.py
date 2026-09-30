@@ -75,6 +75,8 @@ def main():
     p.add_argument("--sym-weight", type=float, default=1.0, help="mirror-symmetry loss weight (version 2)")
     p.add_argument("--head-weight", type=float, default=1.0,
                    help="scale of the version-3 head steadiness/level penalties (0.1 = ten times weaker)")
+    p.add_argument("--speed-sigma", type=float, default=None,
+                   help="fixed speed tracking tolerance in m/s (default 0.5 x max speed x track scale)")
     p.add_argument("--penalty-fixed", type=float, default=None,
                    help="hold the penalty scale at this value instead of ramping it (e.g. 0.6)")
     p.add_argument("--curriculum-total", type=float, default=None,
@@ -86,7 +88,7 @@ def main():
 
     env = make_vec_env(LocomotionEnv, n_envs=args.envs, seed=args.seed, vec_env_cls=SubprocVecEnv,
                        env_kwargs={"species": args.species, "version": args.version,
-                                   "head_weight": args.head_weight})
+                                   "head_weight": args.head_weight, "speed_sigma": args.speed_sigma})
     algo = SymmetricPPO if args.version >= 2 else PPO
     algo_kwargs = {"sym_weight": args.sym_weight} if args.version >= 2 else {}
     if args.resume:

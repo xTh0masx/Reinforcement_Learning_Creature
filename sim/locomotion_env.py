@@ -98,11 +98,12 @@ class LocomotionEnv(gym.Env):
 
     def __init__(self, species="myrranox", episode_seconds=20.0, command_seconds=(2.0, 5.0),
                  stand_prob=0.15, render_mode=None, width=640, height=400, version=1,
-                 model=None, data=None, prefix="", passive=False, head_weight=1.0):
+                 model=None, data=None, prefix="", passive=False, head_weight=1.0, speed_sigma=None):
         self.species_name = species
         self.species = SPECIES[species]
         self.body = body_for(species, version, passive)     # passive=True: tail/abdomen/head/arms on springs
         self.version = version
+        self.speed_sigma = speed_sigma      # training option: fixed speed tolerance (m/s) instead of 0.5 x max speed
         self.w = dict(WEIGHTS[version])
         if version >= 5:
             self.w.update(STEADY_TRUNK_V5.get(species, {}))
@@ -310,7 +311,7 @@ class LocomotionEnv(gym.Env):
         power = float(np.sum(np.abs(d.actuator_force[self.act_ids] * qvel)))        # W, mechanical
 
         sp, w = self.species, self.w
-        sig_v = 0.5 * sp.max_speed * self.track_scale      # wide enough that moving a little already pays off
+        sig_v = self.speed_sigma or 0.5 * sp.max_speed * self.track_scale   # wide enough that moving a little pays off
         sig_w = 0.5 * sp.max_turn_rate * self.track_scale
         lin_err = (lin[0] - self.command[0]) ** 2 + lin[1] ** 2
         ang_err = (ang[2] - self.command[1]) ** 2
