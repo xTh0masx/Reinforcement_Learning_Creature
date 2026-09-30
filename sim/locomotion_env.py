@@ -38,7 +38,8 @@ version=7  as version 6, but the legs follow a built-in step generator (owner, 3
            does not balance the DC.)
 version=8  DC on the mesh-based body (owner, 30 Sep: "enhance the meshes of DC as highly detailed as possible"): every
            part is a convex hull cut from the real DC mesh (sim/dc_hulls.py), paws with claws are the feet, the
-           mass is distributed by volume. Rules as version 6 (no step generator).
+           mass is distributed by volume. Rules as version 6 (no step generator), plus no unnecessary movement:
+           energy weighs double and joint movement while commanded to stand ("fidget") is penalised.
 
 Shared world: pass model/data/prefix to drive one creature inside a bigger MuJoCo world
 (sim/physics_world.py). Then call apply_action(), step the world, and after_physics() - step() does
@@ -92,7 +93,10 @@ TASK_TERMS = ("lin", "ang", "gait", "clearance", "air_time", "style", "register"
 ARM_TUCK = (0.80, 0.20, 0.42)   # version 6: folded claw position in the torso frame (y mirrored per side)
 ANKLE_FOLD = 0.3                # version 6: ankle / wrist fold in mid-swing (rad); flat (no rhythm) in stance
 WEIGHTS[7] = dict(WEIGHTS[6])
-WEIGHTS[8] = dict(WEIGHTS[6])
+WEIGHTS[8] = dict(WEIGHTS[6],
+                  # no unnecessary movement (owner, 30 Sep)
+                  energy=-0.2,          # (v2-v6: -0.1) every movement that does not help costs twice as much
+                  fidget=-0.5)          # standing command: mean (joint speed)^2 - standing means standing still
 CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
 ACTIVE = {7: {"myrranox": False, "dc": True}, 8: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
           5: {"myrranox": False, "dc": True}, 6: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
@@ -417,6 +421,8 @@ class LocomotionEnv(gym.Env):
                 terms["air_time"] = 0.0
             self.air_time = np.where(foot_contact, 0.0, self.air_time + CONTROL_DT)
             self.prev_contact = foot_contact.copy()
+            if "fidget" in w:
+                terms["fidget"] = w["fidget"] * min(float(np.mean(qvel ** 2)), 1.0) if standing else 0.0   # capped
             if "surge" in w:
                 ax = (lin[0] - self.prev_vx) / CONTROL_DT
                 terms["surge"] = w["surge"] * min((ax / 2.0) ** 2, 1.0)   # capped: untrained jitter must not swamp the task
