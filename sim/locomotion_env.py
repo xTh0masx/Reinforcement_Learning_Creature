@@ -31,6 +31,10 @@ version=6  DC "six-limbed panther" (30 Sep): body with the extra arms as actuate
            the chest ("arm_tuck"), from 1.4 m/s the arms join the run (sim/gaits.py). Ankles / wrists join the leg
            rhythm (paws flat in stance, no flicking). Stricter rhythm and fluency weights (gait, air time, joint
            acceleration, action rate, "surge" = speeding up / slowing down within a stride).
+version=7  as version 6, but the legs follow a built-in step generator (owner, 30 Sep: "let the DC walk directly"):
+           joint target = rest pose + gait-clock reference (reach / push / knee and paw fold, folded arms while
+           walking) + the brain's correction (CPG_RESIDUAL rad per action unit). The DC steps on the beat from the
+           first step; the brain learns balance, steering and fine adjustments.
 
 Shared world: pass model/data/prefix to drive one creature inside a bigger MuJoCo world
 (sim/physics_world.py). Then call apply_action(), step the world, and after_physics() - step() does
@@ -83,7 +87,9 @@ WEIGHTS[6] = dict(WEIGHTS[5],
 TASK_TERMS = ("lin", "ang", "gait", "clearance", "air_time", "style", "register", "arm_tuck")
 ARM_TUCK = (0.80, 0.20, 0.42)   # version 6: folded claw position in the torso frame (y mirrored per side)
 ANKLE_FOLD = 0.3                # version 6: ankle / wrist fold in mid-swing (rad); flat (no rhythm) in stance
-ACTIVE = {3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
+WEIGHTS[7] = dict(WEIGHTS[6])
+CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
+ACTIVE = {7: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
           5: {"myrranox": False, "dc": True}, 6: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
 # version 5 leg style per species: (sweep joint index, knee joint index, knee fold rad, max sweep rad)
 STYLE = {"myrranox": (0, 2, 0.8, 0.45), "dc": (1, 2, 0.6, 0.7)}
@@ -294,9 +300,31 @@ class LocomotionEnv(gym.Env):
         if self.version >= 4:                   # low-pass: the joint targets glide instead of jumping
             self.raw = a
             a = self.last_action + ACTION_FILTER * (a - self.last_action)
-        self.data.ctrl[self.act_ids] = np.clip(self.rest_joints + a * self.action_scales,
-                                               self.joint_lo, self.joint_hi)
+        if self.version >= 7:                   # step generator + the brain's correction
+            target = self.rest_joints + self.cpg_targets() + a * CPG_RESIDUAL
+        else:
+            target = self.rest_joints + a * self.action_scales
+        self.data.ctrl[self.act_ids] = np.clip(target, self.joint_lo, self.joint_hi)
         return a
+
+    def cpg_targets(self):
+        """Version 7: joint offsets from the rest pose given by the gait clock (the step generator)."""
+        out = np.zeros(self.nj)
+        leg_phase, stance, duty, f, standing = self.gait_targets()
+        idle = self.arm_legs & (np.broadcast_to(np.asarray(duty, dtype=float), (self.nlegs,)) <= 0)
+        ref = self.style_reference(leg_phase, duty, f, standing)
+        if ref is not None:
+            sweep, knee = ref
+            fold_mean = (1 - np.broadcast_to(np.asarray(duty, dtype=float), (self.nlegs,))) * 2 / np.pi
+            out[self.sweep_idx] = sweep
+            out[self.knee_idx] = knee + fold_mean * self.knee_fold * self.knee_dir    # stance straight, fold in swing
+            if self.ankle_ref is not None:
+                out[self.ankle_idx] = self.ankle_ref + fold_mean * ANKLE_FOLD * self.ankle_dir
+        for i in np.flatnonzero(self.arm_legs):   # arms not in the gait: folded against the chest
+            nj = len(self.body.legs[i].joints)
+            if idle[i] or standing:
+                out[i * nj:(i + 1) * nj] = self.tuck_pose[i]
+        return out
 
     def after_physics(self, a):
         """Read the body after FRAME_SKIP physics steps: reward terms, observation, termination."""
@@ -487,6 +515,37 @@ class LocomotionEnv(gym.Env):
         self.arm_legs = np.array([n.startswith("arm") for n in self.leg_names])
         self.tuck_target = np.array([[ARM_TUCK[0], ARM_TUCK[1] * np.sign(leg.points[0, 1]), ARM_TUCK[2]]
                                      for leg in self.body.legs])
+        # folded arm pose (joint offsets) that brings the claws to the tuck target - small coordinate search
+        self.tuck_pose = {}
+        for i in np.flatnonzero(self.arm_legs):
+            idx = [i * nj + k for k in range(1, nj)]              # pitch joints (shoulder, elbow, wrist)
+            q = np.zeros(len(idx))
+
+            def cost(qq):
+                for k, j in enumerate(idx):
+                    d.qpos[self.joint_qpos[j]] = self.rest_joints[j] + qq[k]
+                return float(np.linalg.norm(foot_body()[i] - self.tuck_target[i]))
+            best = cost(q)
+            for step in (0.4, 0.2, 0.1, 0.05, 0.02):
+                improved = True
+                while improved:
+                    improved = False
+                    for k in range(len(idx)):
+                        for sgn in (1, -1):
+                            trial = q.copy()
+                            trial[k] += sgn * step
+                            lo, hi = self.joint_lo[idx[k]] - self.rest_joints[idx[k]], self.joint_hi[idx[k]] - self.rest_joints[idx[k]]
+                            trial[k] = np.clip(trial[k], lo, hi)
+                            c = cost(trial)
+                            if c < best - 1e-4:
+                                best, q, improved = c, trial, True
+            for j in idx:
+                d.qpos[self.joint_qpos[j]] = self.rest_joints[j]
+            pose = np.zeros(nj)
+            pose[1:] = q
+            self.tuck_pose[i] = pose
+            self.tuck_error = best
+        foot_body()
         self.last_print = np.full((self.nlegs, 2), np.nan)
 
     def style_reference(self, leg_phase, duty, f, standing):
