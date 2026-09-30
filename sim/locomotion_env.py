@@ -39,7 +39,8 @@ version=7  as version 6, but the legs follow a built-in step generator (owner, 3
 version=8  DC on the mesh-based body (owner, 30 Sep: "enhance the meshes of DC as highly detailed as possible"): every
            part is a convex hull cut from the real DC mesh (sim/dc_hulls.py), paws with claws are the feet, the
            mass is distributed by volume. Rules as version 6 (no step generator), plus no unnecessary movement:
-           energy weighs double and joint movement while commanded to stand ("fidget") is penalised.
+           energy weighs double and joint movement while commanded to stand ("fidget") is penalised. Sprint up to
+           SPRINT_SPEED; every command change ramps (speed up at max_accel, slow down gently at SLOW_DOWN).
 
 Shared world: pass model/data/prefix to drive one creature inside a bigger MuJoCo world
 (sim/physics_world.py). Then call apply_action(), step the world, and after_physics() - step() does
@@ -109,6 +110,10 @@ PASSIVE_DAMPING_V5 = {"dc": {"tail": 0.5, "arm_L": 0.5, "arm_R": 0.5}}   # dampi
 STEADY_TRUNK_V5 = {"dc": dict(roll_pitch=-0.5, vz=-1.5)}
 ACTION_FILTER = 0.5          # version 4: target += 0.5 * (action - target) every 20 ms, about 5.5 Hz cut-off
 COMMAND_RAMP_S = (1.5, 1.0)  # version 4: seconds to ramp from 0 to max speed / max turn rate (half the commands)
+# version 8 (owner, 30 Sep): the DC can sprint, and every command change is a ramp - speeding up at the species'
+# max_accel, slowing down gently at SLOW_DOWN, so a sprint eases back into the walk (training and playback alike)
+SPRINT_SPEED = {"dc": 4.0}   # m/s (the navigation brain's max_speed stays 2.5 until it is retrained)
+SLOW_DOWN = 1.0              # m/s^2
 
 
 def body_for(species, version, passive=False):
@@ -136,6 +141,8 @@ class LocomotionEnv(gym.Env):
         self.body = body_for(species, version, passive)     # passive=True: tail/abdomen/head/arms on springs
         self.version = version
         self.speed_sigma = speed_sigma      # training option: fixed speed tolerance (m/s) instead of 0.5 x max speed
+        self.top_speed = SPRINT_SPEED.get(species, SPECIES[species].max_speed) if version >= 8 else SPECIES[species].max_speed
+        self.ramp_all = version >= 8        # every command change ramps (speed up / slow down gradually)
         self.w = dict(WEIGHTS[version])
         if version >= 5:
             self.w.update(STEADY_TRUNK_V5.get(species, {}))
@@ -255,11 +262,27 @@ class LocomotionEnv(gym.Env):
     def set_command(self, speed, turn_rate, hold=True):
         """Forward speed (m/s) and turn rate (rad/s) for the brain to follow; clipped to species limits."""
         sp = self.species
-        self.command = np.array([np.clip(speed, -sp.max_backward_speed, sp.max_speed),
-                                 np.clip(turn_rate, -sp.max_turn_rate, sp.max_turn_rate)])
-        self.command_target = self.command.copy()
-        self.command_rate = None
+        target = np.array([np.clip(speed, -sp.max_backward_speed, self.top_speed),
+                           np.clip(turn_rate, -sp.max_turn_rate, sp.max_turn_rate)])
+        if self.ramp_all:                   # version 8: the command glides to the new value
+            self.command_target = target
+            self.command_rate = self._ramp_rates()
+        else:
+            self.command = target
+            self.command_target = self.command.copy()
+            self.command_rate = None
         self.command_steps_left = 10 ** 9 if hold else self.command_steps_left
+
+    def _ramp_rates(self):
+        sp = self.species
+        return np.array([sp.max_accel, sp.max_turn_rate / COMMAND_RAMP_S[1]]) * CONTROL_DT
+
+    def _advance_command(self):
+        """Move the command toward its target: speeding up at max_accel, slowing down at SLOW_DOWN (version 8)."""
+        rate = self.command_rate.copy()
+        if self.ramp_all and abs(self.command_target[0]) < abs(self.command[0]):
+            rate[0] = SLOW_DOWN * CONTROL_DT
+        self.command = self.command + np.clip(self.command_target - self.command, -rate, rate)
 
     def _resample_command(self):
         rng, sp = self.np_random, self.species
@@ -272,11 +295,14 @@ class LocomotionEnv(gym.Env):
               and u < self.stand_prob + (0.30 if self.version >= 4 else 0.20)):
             v, w = -rng.uniform(0.1, sp.max_backward_speed), 0.0                      # walk backwards
         else:
-            v = rng.uniform(-sp.max_backward_speed, sp.max_speed) if self.version == 1 else rng.uniform(0.1, sp.max_speed)
+            v = rng.uniform(-sp.max_backward_speed, sp.max_speed) if self.version == 1 else rng.uniform(0.1, self.top_speed)
             w = rng.uniform(-sp.max_turn_rate, sp.max_turn_rate) * (rng.uniform() < (0.7 if self.version == 1 else 0.8))
             if not sp.turn_in_place and abs(v) < sp.min_turn_speed:
                 w *= abs(v) / sp.min_turn_speed
-        if self.version >= 4 and rng.uniform() < 0.5:        # ramp to the new command, like the navigation brain
+        if self.ramp_all:                                    # version 8: always a ramp (gradual speed changes)
+            self.command_target = np.array([v, w])
+            self.command_rate = self._ramp_rates()
+        elif self.version >= 4 and rng.uniform() < 0.5:      # ramp to the new command, like the navigation brain
             self.command_target = np.array([v, w])
             self.command_rate = np.array([sp.max_speed / COMMAND_RAMP_S[0],
                                           sp.max_turn_rate / COMMAND_RAMP_S[1]]) * CONTROL_DT
@@ -290,7 +316,8 @@ class LocomotionEnv(gym.Env):
         """(per-leg phase in [0,1), desired stance mask, duty, frequency Hz, standing?) for the current command."""
         v, w = self.command
         offsets, duty = gaits.pattern(self.species_name, self.leg_names, v)
-        f = gaits.frequency(self.species_name, v, w, self.species.max_turn_rate, style=self.version >= 5)
+        f = gaits.frequency(self.species_name, v, w, self.species.max_turn_rate, style=self.version >= 5,
+                            sprint=self.version >= 8)
         standing = gaits.is_standing(v, w)
         leg_phase = (self.phase + offsets) % 1.0
         stance = np.ones(self.nlegs, dtype=bool) if standing else leg_phase < duty
@@ -460,8 +487,7 @@ class LocomotionEnv(gym.Env):
         if self.version >= 4:
             self.last_raw = self.raw
             if self.command_rate is not None:
-                self.command = self.command + np.clip(self.command_target - self.command, -self.command_rate,
-                                                      self.command_rate)
+                self._advance_command()
 
         self.t += 1
         self.command_steps_left -= 1
