@@ -31,6 +31,11 @@ ASSETS = {
     "dc":       {"object": "DC_SKIN_RAW",      "axis": 2, "size": 1.3},   # overall height, ~1.0 m shoulder
 }
 RIGS = {"myrranox": "Myrranox_rig", "dc": "DC_rig"}
+# Display-only head stabilization (owner, 30 Sep: "the head should not wobble at all"). The physics and the brains
+# are unchanged; in the animation the head keeps its modelled (level) orientation and turns only with the body's
+# smoothed heading, and the neck angles are smoothed without lag, so the head does not bob with each step.
+HEAD_STABILIZE = {"DC_rig": {"bone": "head", "neck_joints": ("neck_p0x", "neck_p0y", "neck_p1x"),
+                             "neck_sigma_s": 0.2, "yaw_sigma_s": 0.3}}
 
 
 def _collection():
@@ -123,13 +128,55 @@ def _read_pose(path):
     return {name: data[:, i] for i, name in enumerate(header)}
 
 
-def _animate_rig(arm, pose, last_time):
+def _gauss(values, sigma_s, dt):
+    """Zero-phase Gaussian smoothing (no lag), edges reflected."""
+    n = max(int(round(3 * sigma_s / dt)), 1)
+    k = np.exp(-0.5 * (np.arange(-n, n + 1) * dt / sigma_s) ** 2)
+    k /= k.sum()
+    return np.convolve(np.pad(values, n, mode="reflect"), k, mode="valid")
+
+
+def _stabilize_head(col, arm, cfg, t, frames, qi):
+    """Hold the head bone at its rest orientation, turned only by the smoothed body heading (Copy Rotation from a
+    keyed empty, world space)."""
+    yaw = np.unwrap(np.arctan2(2 * (qi[:, 0] * qi[:, 3] + qi[:, 1] * qi[:, 2]), 1 - 2 * (qi[:, 2] ** 2 + qi[:, 3] ** 2)))
+    yaw = _gauss(yaw, cfg["yaw_sigma_s"], 1.0 / FPS)
+    rest = arm.matrix_world.to_3x3() @ arm.data.bones[cfg["bone"]].matrix_local.to_3x3()
+    aim = _link(col, bpy.data.objects.new(f"HeadAim_{arm.name}", None))
+    aim.empty_display_size = 0.1
+    aim.hide_render = True
+    aim.rotation_mode = "QUATERNION"
+    rots, prev = [], None
+    for a in yaw:
+        rq = (Matrix.Rotation(float(a), 3, "Z") @ rest).to_quaternion()
+        if prev is not None and rq.dot(prev) < 0:
+            rq.negate()
+        prev = rq
+        rots.append(tuple(rq))
+    rots = np.array(rots)
+    fcs = _fcurves(aim)
+    for i in range(4):
+        _key(fcs, "rotation_quaternion", i, frames, rots[:, i], 1)
+    pb = arm.pose.bones[cfg["bone"]]
+    for c in [c for c in pb.constraints if c.name == "RL_head_stable"]:
+        pb.constraints.remove(c)
+    c = pb.constraints.new("COPY_ROTATION")
+    c.name, c.target = "RL_head_stable", aim
+    c.owner_space = c.target_space = "WORLD"
+
+
+def _animate_rig(arm, pose, last_time, col=None):
     """Key the rig from a 50 Hz physics pose table, resampled to FPS."""
     t = np.arange(0.0, min(last_time, pose["time"][-1]) + 1e-9, 1.0 / FPS)
     frames = 1 + t * FPS
+    stab = HEAD_STABILIZE.get(arm.name) if col is not None else None
+    dt_pose = float(pose["time"][1] - pose["time"][0])
 
     def lerp(name):
-        return np.interp(t, pose["time"], pose[name])
+        values = pose[name]
+        if stab and name in stab["neck_joints"]:
+            values = _gauss(values, stab["neck_sigma_s"], dt_pose)
+        return np.interp(t, pose["time"], values)
 
     # Quaternion: nlerp between neighbouring samples (dense enough at 50 Hz), keep sign continuous.
     q = np.column_stack([pose[k] for k in ("qw", "qx", "qy", "qz")])
@@ -188,6 +235,11 @@ def _animate_rig(arm, pose, last_time):
         out = np.array(out)
         for i in range(4):
             _key(fcs, f'pose.bones["{bone.name}"].rotation_quaternion', i, frames, out[:, i], 1)
+    for pb in arm.pose.bones:                       # constraints from an earlier import
+        for c in [c for c in pb.constraints if c.name == "RL_head_stable"]:
+            pb.constraints.remove(c)
+    if stab:
+        _stabilize_head(col, arm, stab, t, frames, qi)
     return int(frames[-1])
 
 
@@ -442,7 +494,7 @@ def import_csv(path, habitat_path=None):
         rig = bpy.data.objects.get(RIGS.get(species[cid], ""))
         pose_path = f"{os.path.splitext(path)[0]}_{cid}_pose.csv"
         if cid.endswith("_0") and rig is not None and os.path.exists(pose_path):
-            _animate_rig(rig, _read_pose(pose_path), float(t[-1]))
+            _animate_rig(rig, _read_pose(pose_path), float(t[-1]), col)
             model = rig
         elif cid.endswith("_0") and rig is None:
             model = _attach_asset(root, species[cid])

@@ -20,8 +20,8 @@ from sim.nav_brain import NavBrain
 from sim.physics_world import PhysicsWorld
 
 PREDATORS = {"myrranox": "models/myr_brain_v3_r1", "dc": "models/dc_brain_v4_r1"}
-# Walking brains: Myrranox v5 (natural style, working knees) on the v2 body + passive parts; DC v4 (precise + fluid) on the "alive" v3 body
-WALKERS = {"myrranox": "models/myr_legs_v5", "dc": "models/dc_legs_v4"}
+# Walking brains: Myrranox v5 (natural style, working knees) on the v2 body + passive parts; DC v5c (panther stride) on the "alive" v3 body
+WALKERS = {"myrranox": "models/myr_legs_v5", "dc": "models/dc_legs_v5c"}
 
 
 def make_env(ego, other, seed, habitat_path=None):
