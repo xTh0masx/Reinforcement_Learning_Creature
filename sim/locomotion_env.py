@@ -783,7 +783,9 @@ class LocomotionEnv(gym.Env):
                 mujoco.mj_step(m, d)
             self.stand_z = float(d.qpos[self.q0 + 2])
         else:
-            self.stand_z = float(self.init_qpos[self.q0 + 2])
+            # shared world (habitat): the world cannot be stepped here - measure the settled height on a private copy
+            # of this creature (else an upright creature counts as fallen, 13 Oct: 98 "falls" per minute)
+            self.stand_z = LocomotionEnv(self.species_name, version=self.version).stand_z
         mujoco.mj_resetData(m, d) if not self.shared else None
         d.qpos[:] = self.init_qpos
         mujoco.mj_forward(m, d)

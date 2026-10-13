@@ -28,3 +28,7 @@ dc_legs_v4,2026-09-28,88d54ec,dc,7004160,-,RELEASED (precise + fluid),v4 from dc
 myr_legs_v5,2026-09-30,3db4b52,myrranox,10004160,-,recommended (natural style),v5 from v4 with freed knees +3M: knee 4.5 -> 20 deg; foot lift 9 -> 13 cm; torso wobble 0.58 -> 0.41; spot turn 65/72 deg/s; 79 W; no falls
 dc_legs_v5,2026-09-29,bdb02d8,dc,8504160,-,stopped (unstable),v5 from v4 with freed abduction/shoulders +1.5M: stride 0.64 m at 1.22 steps/s; torso wobble 0.40 -> 0.59; head tilt 2.4 -> 5.9 deg
 dc_legs_v5b,2026-09-30,3db4b52,dc,10504160,-,mixed (owner decision),dc_legs_v5 8.5M + steady trunk +2M: stride 0.55 m at 1.12 steps/s; hind paw 26 cm from front print; torso 0.44; head wobble 0.80, tilt 7.7 deg; walk 0.62/0.8 m/s
+dc_legs_v5c,2026-09-30,3ab3c31,dc,12507536,-,DC walker (showcase),head x3 + speed sigma 0.2: 0.78 m/s; stride 0.62 m; head stabilised in Blender only
+dc_legs_v8,2026-09-30,81183a1,dc,4300000,-,failed (collapse),mesh body + sprint: handstand fixed by 25 deg fall; best 0.37 m/s at 2.75M; standing still from 3.2M
+dc_legs_v9_s1f,2026-10-13,46ffd44,dc,8006608,-,best DC on v9 at 7.5M,0.65 m/s; trunk 3.7 deg; lateral footfall order; hind legs 2-4 steps per cycle
+myr_legs_v10,2026-10-13,ffc1d80,myrranox,3000000,-,RELEASED,tripod step generator + corrections; abdomen density 0.25: 0.52/1.08 m/s; spot turn 56/72; backwards -0.26/-0.30; knee 60; abdomen clear; no falls; front legs 21 % on the ground

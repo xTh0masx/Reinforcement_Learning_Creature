@@ -291,6 +291,54 @@ training `docs/videos/myr_legs_v5_training.mp4`, `dc_legs_v5_training.mp4`, `dc_
 DC skinning check: 20 % of the proxy vertices are blended between several bones (normal for automatic weights);
 "preserve volume" skinning not yet tried.
 
+## 6h. Mesh bodies, new reward, walking v6–v11 (30 Sep, 13 Oct)
+
+**30 Sep – DC experiments (none released).** v5c (head ×3, strict speed) became the DC walker (0.78 m/s, panther
+stride; the head is held steady in the Blender animation only). v6: the extra arms became actuated limbs (29 motors),
+legs ±8° sideways, stricter rhythm rules - a brain transplanted from v5c (`grow_brain.py`) stood still, from scratch it
+was stopped by the owner. v7: a step generator (tripod / walk rhythm + learned corrections) - the rhythm alone made the
+DC fall every 1.5 s (a quadruped is not statically stable). v8: DC body made of convex hulls cut from the real mesh,
+sprint to 4 m/s, ramped commands - it did a "handstand" on its front legs and arms (fixed: 25° tilt = fall) and
+collapsed into standing still once the penalties reached full strength (3.2M).
+
+**13 Oct – new reward structure (walking v9, both creatures).** Penalties used to be subtracted, so at full strength
+standing still lost less than walking (the trap of Myrranox v3 and DC v8). Now
+`reward = tracking × (0.2 + 0.8 × animal-likeness) × quality` with `quality = exp(−Σ c·cost)`; standing still while
+walking is commanded earns almost nothing. Both creatures got mesh bodies (Myrranox: 21 hulls; DC: shoulder hump moved
+to the chest) and a natural standing pose as the neutral position of their commands. Fixes found on the way: exploration
+noise was penalised as jerk (quality 0.06 in training → measured after the filter), resumed brains carried the old
+reward statistics (return std ~95 → `--reset-reward-norm`), the fall check used the computed instead of the settled
+height (false falls), command ranges too small for the new stances (Myrranox legs ±50°, DC arms ±103°).
+
+**Myrranox walking v10 (released).** On v9 the Myrranox kept finding ways round the rules (stepping in place, a
+"wheelbarrow" with the front legs in the air). Root cause was the body: mass by volume gave the abdomen 54 % of the
+weight, the centre of mass sat over the hind legs, and even a perfect tripod rhythm tipped it back. Abdomen density
+×0.25 (23 % of the weight) and a tripod step generator with learned corrections (version 10) made it walk like an
+insect, from scratch in 3M steps:
+
+| Myrranox (walk script) | v5 (previous walker) | **v10 (released 13 Oct)** |
+| --- | --- | --- |
+| Walk / full speed (command 0.6 / 1.2 m/s) | 0.59 / 1.13 | **0.52 / 1.08** |
+| Walking turns (±54 °/s) / turn on the spot (72 °/s) | +65 −58 / 65 | **+57 −49 / 56** |
+| Backwards (command −0.3 m/s) | −0.01 (never learned) | **−0.26** |
+| Trunk tilt / bob | – | **2.0° / 1.4 cm** |
+| Knee / hip swing | 20° / 24° | **60° / 28°** |
+| Abdomen on the ground | – | **0 %** |
+| Tripod groups in opposite phase | – | **87 %** |
+| Front feet on the ground | – | 21–22 % (target ~55 %), stepping too fast (5–6 /s) |
+| Falls / joint commands beyond the limit | 0 / – | 0 / 0 % |
+
+**DC walking v11 (training).** The DC hull body was head-heavy (neck + head 21 %, trunk 37 %, centre of mass almost
+over the front paws) and its claw hulls caught on the ground. v11: big-cat mass distribution (trunk 55 %, neck + head
+9 %, hind legs 15 %, front legs 12 %, arms 6 %, tail 3 %) and rounded paw pads. Best DC on v9 so far: 0.65 m/s, trunk
+3.7°, correct lateral footfall order, but hind legs stepping 2–4× per cycle (an "extra step" cost made it stop using the
+hind legs altogether and was switched off).
+
+Measurements: `docs/evaluations/` and the session's checkpoints; videos `docs/videos/myr_legs_v10_training.mp4`,
+`docs/videos/myr_legs_v5_vs_v10.mp4`; footfall `docs/figures/gait/overview_myrranox.png`; physics bodies
+`docs/figures/*_physics_body_mesh.jpg`, standing poses `docs/figures/standing_pose_v9.png`; presentation
+`docs/presentation/Endemic_Creatures_RL.pptx`.
+
 ## 7. Videos and graphs
 
 | File | What it shows |
@@ -310,6 +358,8 @@ DC skinning check: 20 % of the proxy vertices are blended between several bones 
 | `videos/showcase_side_by_side_v4_no_rocks.mp4` | **Showcase v4 without rocks, 5:00 (latest)**: both on walking v4, habitat without rocks (`sim/habitat_no_rocks.json`) |
 | `videos/showcase_side_by_side_v4.mp4` | **Showcase v4, 5:00**: both creatures on walking v4 (precise + fluid), rock-dodging side cameras |
 | `videos/showcase_side_by_side_v3.mp4` | **Showcase v3, 5:00**: the same with the alive DC (walking v3) and Myrranox v2 + passive parts; cameras dodge rocks |
+| `videos/myr_legs_v10_training.mp4`, `videos/myr_legs_v5_vs_v10.mp4` | **Myrranox walking v10**: whole training (0 → 3M) and v5 vs v10 on the same commands |
+| `presentation/Endemic_Creatures_RL.pptx` | Project presentation (German, 38 slides) |
 | `videos/myr_legs_v4_vs_v5.mp4`, `videos/dc_legs_v4_vs_v5.mp4`, `videos/*_legs_v5*_training.mp4` | **Walking v5 (natural style)**: insect knees / panther stride before vs after; whole v5 trainings |
 | `videos/*_legs_v4_training.mp4`, `videos/myr_legs_v2_vs_v4.mp4`, `videos/dc_legs_v3_vs_v4.mp4` | **Walking v4 (precise + fluid)**: whole fine-tuning (4M → 7M, every 250k) next to the learning curve; before / after on the same commands |
 | `figures/locomotion/*_legs_v4/`, `figures/gait/*_legs_v4_*` | v4 progress graphs, checkpoint clips, footfall diagrams (incl. Myrranox spot turn `myr_legs_v4_footfall_0.00.png`) |

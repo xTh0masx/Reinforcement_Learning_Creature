@@ -8,12 +8,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 GAIT = "docs/figures/gait"
 SHEETS = {
-    "myrranox": (["myr_legs_v1", "myr_legs_v2", "myr_legs_v3", "myr_legs_v4", "myr_legs_v5"],
+    "myrranox": (["myr_legs_v1", "myr_legs_v2", "myr_legs_v3", "myr_legs_v4", "myr_legs_v5", "myr_legs_v10"],
                  [("0.60", "walk 0.6 m/s"), ("1.20", "full speed 1.2 m/s"), ("0.00", "turn on the spot 72 deg/s")]),
     "dc": (["dc_legs_v1", "dc_legs_v2", "dc_legs_v3", "dc_legs_v4", "dc_legs_v5b", "dc_legs_v5c"],
            [("0.80", "walk 0.8 m/s"), ("2.50", "trot 2.5 m/s")]),
 }
-NOTES = {"myr_legs_v3": " (failed)", "myr_legs_v5": " (released)", "dc_legs_v5c": " (released)", "dc_legs_v5b": " (not used)"}
+NOTES = {"myr_legs_v3": " (failed)", "myr_legs_v10": " (released)", "dc_legs_v5c": " (released)", "dc_legs_v5b": " (not used)"}
 SCALE, LABEL_W, HEAD_H = 0.5, 230, 60
 
 

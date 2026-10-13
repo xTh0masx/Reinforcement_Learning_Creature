@@ -104,6 +104,17 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | 30.09 08:20 – 08:40 | 0.3 h compute | Runs resumed and finished | 10M / 10.5M |
 | 08:40 – 09:10 | 0.5 h | Evaluation, checkpoint scan, videos, graphs, documentation | |
 
+## Session 8 – 13 Oct (mesh bodies, walking v9–v11, presentation)
+
+| Time | Duration | Step | Result |
+| --- | --- | --- | --- |
+| ~08:30 – 09:20 | 0.8 h | Myrranox mesh body, DC shoulder fix, overlays; v9 reward + calibration | `f1940ee`, `39d43fd` |
+| 09:20 – 12:15 | **2.9 h compute** | Stage 1 attempts s1–s1c (noise, reward statistics, command ranges fixed) | stage-1 brains |
+| 13:20 – 14:35 | 1.3 h | Natural standing poses, fall-height fix, adjustments; s1d/s1e | `f0e6e7d` … `ac84902` |
+| 14:35 – 19:30 | **~5 h compute** | Myrranox fresh / walk help / v10; DC s1e–s1g | Myrranox v10 released |
+| 17:20 – 17:55 | 0.6 h | Presentation (38 slides) | `934db12` |
+| 18:30 – 19:15 | 0.7 h | Myrranox front-leg analysis → abdomen density; DC lean body v11 | `ffc1d80`, `09cd04a` |
+
 ## Compute per training run
 
 | Run | Start → end | Wall time | Steps | Outcome |
@@ -124,6 +135,7 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | Showcase v4 render | 28.09 13:13 → 18:05 | 4.9 h | 18 002 frames | video |
 | myr/dc_legs_v5_pilot | 29.09 09:40 → 09:50 | 0.2 h | 2 × 0.5M | DC ok, Myr knee locked |
 | myr_legs_v5, dc_legs_v5, dc_legs_v5b | 29.09 09:52 → 12:50, 30.09 08:20 → 08:40 | 3.3 h | 3M + 1.5M + 2M | Myr recommended, DC mixed |
+| v9 / v10 / v11 stages | 13.10 09:20 → 20:30 | ~9 h (2 runs in parallel) | ~20M | Myrranox v10 released |
 | Showcase v4 no-rocks render | 28.09 18:25 → 21:50, 29.09 08:11 → 09:02 | 4.3 h | 18 002 frames | video |
 
 Speeds on this PC (8 CPU cores, no CUDA GPU): walking training ≈ 650–850 steps/s per run with two runs in parallel,

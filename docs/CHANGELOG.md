@@ -5,6 +5,21 @@ All changes and owner decisions, newest first. Commit hashes refer to branch `rl
 [predator_training_log.md](predator_training_log.md), [experiments.csv](experiments.csv),
 time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
+## 13 Oct 2026
+
+**Mesh bodies, new reward, Myrranox v10 released, DC v11 started** (owner: "walk like their animals", "more realistic
+bodies", "the Myrranox must be corrected", "the DC mesh is too clunky")
+- `sim/hulls.py` + `blender/scripts/export_parts.py`: convex hull per bone for both creatures (right limbs mirrored,
+  DC shoulder hump → chest); Myrranox mesh body (21 hulls); `HULL_DENSITY` (Myrranox abdomen ×0.25), `DC_LEAN_MASS`
+  (big-cat distribution) and rounded paw pads (DC v11); springs scaled to the real part masses, abdomen spring from physics.
+- Walking v9: `reward = tracking × (0.2 + 0.8 × likeness) × quality`, speed-relative tracking tolerance, natural
+  standing pose as neutral (`STAND_TALLER`), quality costs incl. belly, idle leg, sliding, taps, paw track;
+  `--reset-reward-norm`, `--max-command`, `--walk-help`; stuck-joint monitor; fall check on the settled height (also in
+  the habitat world).
+- Walking v10 (Myrranox): tripod step generator + learned corrections → **released**, default walker of
+  `record_world.py` (habitat test: no falls, 2 prey / min). Walking v11 (DC): lean body, training.
+- `docs/presentation/Endemic_Creatures_RL.pptx`: project presentation (German, 38 slides).
+
 ## 30 Sep 2026
 
 **Walking v5 – natural style** (`bdb02d8`, `3db4b52`; owner request 29 Sep)

@@ -39,6 +39,12 @@ speed/turn commands every 2–5 s, 15 % standing), PPO with 8 parallel environme
 | 14 | 29–30 Sep 2026 | `myr_legs_v5` | Myrranox | 7M → **10M** (from `myr_legs_v5_start` = v4 with knees freed; paused 12:50 at 9.75M, resumed next day) | v5 | **Recommended.** Knee 4.5 → 20°, foot lift 9 → 13 cm, torso wobble −29 %, spot turn 58 → 65 °/s, precision unchanged, no falls; power 57 → 79 W. |
 | 15 | 29 Sep 2026 | `dc_legs_v5` | DC | 7M → 8.5M (stopped) | v5 from `dc_legs_v5_start` (abduction + front shoulders freed) | Panther stride (1.22 steps/s, 0.64 m) but the owner saw an unstable body: torso wobble 0.40 → 0.59 rad/s, head tilt 2.4 → 5.9°. Stopped. |
 | 16 | 29–30 Sep 2026 | `dc_legs_v5b` | DC | 8.5M → **10.5M** (paused at 9.25M, resumed) | #15 + steady trunk (roll/pitch −0.5, bounce −1.5, scaled by tracking) | **Mixed.** Torso wobble back to 0.44, strides 0.55 m at 1.12 steps/s, hind paw 26 cm from the front print (v4: 33); but head wobble 0.80 / tilt 7.7° and walk speed 0.62 of 0.8 m/s. No checkpoint as steady as v4 → owner decision. |
+| 17 | 30 Sep 2026 | `dc_legs_v5c` | DC | 10.5M → 12.5M | v5b + head ×3, speed tolerance 0.2 m/s | **DC walker** (showcase): 0.78 m/s, stride 0.62 m at 1.25 steps/s; head wobble unchanged (0.84 rad/s) → head stabilised in the Blender animation only. |
+| 18 | 30 Sep 2026 | `dc_legs_v6`, `dc_legs_v6s` | DC | 1M / 0.66M (stopped) | v6: arms as actuated limbs, legs ±8°, stricter rhythm; brain transplant from v5c (`grow_brain.py`) / from scratch | Transplant stood still (9–10 joints stuck); from scratch stopped by the owner while shuffling. |
+| 19 | 30 Sep 2026 | `dc_legs_v8` | DC | 8M planned, stopped ~4.3M | v8: mesh hull body, sprint 4 m/s, ramps, no unnecessary movement | Handstand on front legs + arms (→ 25° tilt = fall); best 0.37 m/s at 2.75M, collapsed into standing still from 3.2M. |
+| 20 | 13 Oct 2026 | `*_legs_v9_s1`…`s1f` | both | stages of 0.5–2M | v9: multiplicative reward, mesh bodies, standing pose; series of fixes (noise, reward statistics, command ranges, false falls) | DC: correct lateral footfall order, 0.65 m/s, trunk 3.7° (best at 7.5M) but hind legs tripping; Myrranox: stepping in place, then a 'wheelbarrow'. |
+| 21 | 13 Oct 2026 | `myr_legs_v10` | Myrranox | **0 → 3M** (abdomen density changed at 1.75M) | v10: tripod step generator + corrections, lighter abdomen | **Released.** 0.52 / 1.08 m/s, spot turns 56 °/s, walks backwards (−0.26) for the first time, trunk level, knee 60°, abdomen clear, tripod 87 %, no falls; front legs still too little on the ground (21 %). |
+| 22 | 13 Oct 2026 | `dc_legs_v11` | DC | from 7.5M, 2M | v11: big-cat mass distribution, rounded paw pads | training |
 
 Reward values are **not comparable between sessions** — the reward definition changed each time.
 Compare sessions by the evaluation metrics (`metrics.csv`: speed/turn tracking error, falls, foot slip).
@@ -123,6 +129,14 @@ Untested idea: smaller movement ranges for the new Myrranox head/abdomen joints 
     output bias back inside the range revived the knee within one run.
 12. (v5) Style changes shift the body dynamics: longer, slower strides made the DC trunk rock until a steady-trunk
     term was added - and even then it did not reach v4's calm. Measure steadiness alongside every style change.
+13. (v9) Check what standing still earns under every command type AND with exploration noise: noise penalised as jerk
+    wiped out the points (quality 0.06) and the brains learned nothing.
+14. (v9) A resumed brain carries its reward statistics: after a reward change they must be reset, or the new rewards
+    look like noise (explained variance −4).
+15. (v10) Fix the body before the brain: mass by volume made the Myrranox rear-heavy and the DC head-heavy; every rule
+    change before that only produced new evasions (stepping in place, wheelbarrow, handstand).
+16. (v10) A hexapod tripod is statically stable, so a step generator with learned corrections works for the Myrranox; for
+    the quadruped DC the open-loop rhythm falls over.
 
 ## Walking v4 – precise and fluid (28 Sep 2026)
 
