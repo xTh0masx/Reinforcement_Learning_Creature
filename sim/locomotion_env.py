@@ -47,6 +47,10 @@ version=9  both creatures on their mesh-based bodies (sim/hulls.py), new reward 
            walking is commanded. animal-likeness: gait beat, leg rhythm and each animal's traits (0..1). quality:
            exp(-sum of normalised penalties) (0..1) - jerks, energy, sliding feet, a rocking trunk, ... only shrink
            the points, they can never make standing still better than walking (the trap of v3, v8).
+version=10 Myrranox: as version 9, plus the step generator (as in v7, owner 13 Oct: "the Myrranox is not using the
+           legs correctly"): joint target = rest + standing pose + tripod rhythm from the gait clock (hip sweep, knee
+           fold) + the brain's correction (CPG_RESIDUAL_V10 x action). A hexapod tripod is statically stable, so the
+           rhythm alone already walks (0.37 m/s, no falls, tested); the brain learns balance, steering and details.
 
 Shared world: pass model/data/prefix to drive one creature inside a bigger MuJoCo world
 (sim/physics_world.py). Then call apply_action(), step the world, and after_physics() - step() does
@@ -106,13 +110,15 @@ ANKLE_FOLD = 0.3                # version 6: ankle / wrist fold in mid-swing (ra
 STAND_TALLER = {"myrranox": {"front": 0.06, "mid": 0.06, "back": 0.12},
                 "dc": {"front": 0.03, "hind": 0.0}}       # DC: trunk level (nose-down 5.5 -> 4.1 deg), arms folded
 WEIGHTS[7] = dict(WEIGHTS[6])
+CPG_RESIDUAL_V10 = 0.45      # version 10: rad per action unit for the brain's correction on top of the tripod rhythm
 WEIGHTS[8] = dict(WEIGHTS[6],
                   # no unnecessary movement (owner, 30 Sep)
                   energy=-0.2,          # (v2-v6: -0.1) every movement that does not help costs twice as much
                   fidget=-0.5,          # standing command: mean (joint speed)^2 - standing means standing still
                   arm_ground=-1.0)      # per folded arm touching the ground (owner: no handstand on front legs + arms)
 MAX_TILT_V8 = 25.0           # deg: a trunk tilted further counts as a fall (the "handstand" had ~20 deg nose down)
-WEIGHTS[9] = dict(WEIGHTS[8])  # (the term values are still computed for analysis; v9 scores with V9_QUALITY)
+WEIGHTS[9] = dict(WEIGHTS[8])
+WEIGHTS[10] = dict(WEIGHTS[9])  # (the term values are still computed for analysis; v9 scores with V9_QUALITY)
 # version 9 quality factor: exp(-penalty_scale * sum(c * p)); p = normalised penalty, c = how much it shrinks the points
 V9_QUALITY = dict(
     energy=0.08,        # mechanical power / (m g v_walk) (knee mostly exempt)
@@ -137,7 +143,8 @@ V9_QUALITY = dict(
     idle_leg=0.5)       # per leg that has not touched the ground for 2 step cycles while walking (13 Oct: the
                         # Myrranox carried both front legs in the air and pushed like a wheelbarrow)
 CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
-ACTIVE = {7: {"myrranox": False, "dc": True}, 8: {"myrranox": False, "dc": True}, 9: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
+ACTIVE = {7: {"myrranox": False, "dc": True}, 8: {"myrranox": False, "dc": True}, 9: {"myrranox": False, "dc": True},
+          10: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
           5: {"myrranox": False, "dc": True}, 6: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
 # version 5 leg style per species: (sweep joint index, knee joint index, knee fold rad, max sweep rad)
 STYLE = {"myrranox": (0, 2, 0.8, 0.45), "dc": (1, 2, 0.6, 0.7)}
@@ -389,6 +396,8 @@ class LocomotionEnv(gym.Env):
             a = self.last_action + ACTION_FILTER * (a - self.last_action)
         if self.version == 7:                   # step generator + the brain's correction
             target = self.rest_joints + self.cpg_targets() + a * CPG_RESIDUAL
+        elif self.version >= 10:                # standing pose + tripod rhythm + the brain's correction
+            target = self.rest_joints + self.neutral + self.cpg_targets() + a * CPG_RESIDUAL_V10
         else:
             target = self.rest_joints + self.neutral + a * self.action_scales
         self.data.ctrl[self.act_ids] = np.clip(target, self.joint_lo, self.joint_hi)

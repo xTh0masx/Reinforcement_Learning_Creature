@@ -306,11 +306,22 @@ def dc(passive=False, active=False, arms=False, hulls=False):
                     head_body="neck_s1" if active else "")
 
 
+# Relative density of body parts (default 1). An insect's abdomen (gaster: air sacs, crop) is much lighter than its
+# muscle-filled thorax; mass by plain volume gave the Myrranox abdomen 54 % of the weight, the centre of mass sat over
+# the hind legs and even a perfect tripod rhythm tipped it back with the front feet in the air (13 Oct).
+HULL_DENSITY = {"myrranox": {"abdomen": 0.5}}
+
+
+def hull_mass(spec, bone):
+    """Mass of a hull part: the creature's mass shared by volume x relative density."""
+    dens = HULL_DENSITY.get(spec.name, {})
+    weighted = {b: h["volume"] * dens.get(b, 1.0) for b, h in spec.hulls.items()}
+    return spec.mass * weighted[bone] / sum(weighted.values())
+
+
 def _hull_geom(spec, bone, origin, name=None, prefix_mesh=True):
-    """Mesh geom for a hull: vertices relative to the body origin, mass by volume share of the whole body."""
-    h = spec.hulls[bone]
-    total = sum(x["volume"] for x in spec.hulls.values())
-    mass = spec.mass * h["volume"] / total
+    """Mesh geom for a hull: vertices relative to the body origin, mass by volume x density share of the body."""
+    mass = hull_mass(spec, bone)
     gname = f' name="{name}"' if name else ""
     return f'<geom{gname} type="mesh" mesh="@MESH@hull_{bone}" mass="{mass:.4f}" class="creature"/>'
 
@@ -374,8 +385,7 @@ def _passive_xml(ch, offset=(0.0, 0.0, 0.0), spec=None):
     pts = [np.asarray(p, dtype=float) for p in ch.points]
     masses = list(ch.masses)
     if spec is not None and spec.hulls:                     # walking v8: the real part masses (by hull volume)
-        total = sum(x["volume"] for x in spec.hulls.values())
-        masses = [spec.mass * spec.hulls[bone]["volume"] / total for bone in ch.bones]
+        masses = [hull_mass(spec, bone) for bone in ch.bones]
     for i, seg in enumerate(ch.joints):
         origin = pts[i] - (pts[i - 1] if i else np.asarray(offset, dtype=float))
         vec = pts[i + 1] - pts[i]
