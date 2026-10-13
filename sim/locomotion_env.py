@@ -41,6 +41,12 @@ version=8  DC on the mesh-based body (owner, 30 Sep: "enhance the meshes of DC a
            mass is distributed by volume. Rules as version 6 (no step generator), plus no unnecessary movement:
            energy weighs double and joint movement while commanded to stand ("fidget") is penalised. Sprint up to
            SPRINT_SPEED; every command change ramps (speed up at max_accel, slow down gently at SLOW_DOWN).
+version=9  both creatures on their mesh-based bodies (sim/hulls.py), new reward structure (owner, 13 Oct):
+               reward = tracking x (0.4 + 0.6 x animal-likeness) x quality      (falls end the episode, -10)
+           tracking: speed and turn as commanded (0..1) - no points without it, so standing still never pays while
+           walking is commanded. animal-likeness: gait beat, leg rhythm and each animal's traits (0..1). quality:
+           exp(-sum of normalised penalties) (0..1) - jerks, energy, sliding feet, a rocking trunk, ... only shrink
+           the points, they can never make standing still better than walking (the trap of v3, v8).
 
 Shared world: pass model/data/prefix to drive one creature inside a bigger MuJoCo world
 (sim/physics_world.py). Then call apply_action(), step the world, and after_physics() - step() does
@@ -100,8 +106,28 @@ WEIGHTS[8] = dict(WEIGHTS[6],
                   fidget=-0.5,          # standing command: mean (joint speed)^2 - standing means standing still
                   arm_ground=-1.0)      # per folded arm touching the ground (owner: no handstand on front legs + arms)
 MAX_TILT_V8 = 25.0           # deg: a trunk tilted further counts as a fall (the "handstand" had ~20 deg nose down)
+WEIGHTS[9] = dict(WEIGHTS[8])  # (the term values are still computed for analysis; v9 scores with V9_QUALITY)
+# version 9 quality factor: exp(-penalty_scale * sum(c * p)); p = normalised penalty, c = how much it shrinks the points
+V9_QUALITY = dict(
+    energy=0.08,        # mechanical power / (m g v_walk) (knee mostly exempt)
+    jerk=2.0,           # mean (joint acceleration / 500 rad/s^2)^2
+    action_rate=10.0,   # mean (change of the brain's command)^2
+    slip=0.3,           # feet sliding while on the ground
+    trunk_rock=0.3,     # trunk roll / pitch rate^2
+    bounce=1.0,         # vertical trunk speed^2
+    tilt=2.0,           # static trunk tilt (1 - cos)
+    surge=0.2,          # speeding up / slowing down within a stride
+    landing=0.05,       # hard touchdowns (vertical foot speed^2)
+    taps=0.3,           # touchdowns after less than half a swing (taps, double steps)
+    head_steady=0.05,   # DC: head rotation not explained by the turn
+    head_level=2.0,     # DC: head tilt
+    fidget=0.5,         # joint movement while commanded to stand
+    joint_limit=0.5,    # joints near their limits
+    belly=1.0,          # Myrranox: abdomen on the ground (an ant carries it)
+    arm_ground=1.0,     # DC: folded arm on the ground at walking speed
+    body_contact=2.0)   # trunk on the ground
 CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
-ACTIVE = {7: {"myrranox": False, "dc": True}, 8: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
+ACTIVE = {7: {"myrranox": False, "dc": True}, 8: {"myrranox": False, "dc": True}, 9: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
           5: {"myrranox": False, "dc": True}, 6: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
 # version 5 leg style per species: (sweep joint index, knee joint index, knee fold rad, max sweep rad)
 STYLE = {"myrranox": (0, 2, 0.8, 0.45), "dc": (1, 2, 0.6, 0.7)}
@@ -122,6 +148,8 @@ def body_for(species, version, passive=False):
     """The body a walking brain of this version controls."""
     if version >= 6 and species == "dc":
         body = BODIES[species](passive=True, active=True, arms=True, hulls=version >= 8)
+    elif version >= 9:
+        body = BODIES[species](passive=True, hulls=True)
     elif ACTIVE.get(version, {}).get(species, False):
         body = BODIES[species](passive=True, active=True)
     else:
@@ -145,6 +173,7 @@ class LocomotionEnv(gym.Env):
         self.speed_sigma = speed_sigma      # training option: fixed speed tolerance (m/s) instead of 0.5 x max speed
         self.top_speed = SPRINT_SPEED.get(species, SPECIES[species].max_speed) if version >= 8 else SPECIES[species].max_speed
         self.ramp_all = version >= 8        # every command change ramps (speed up / slow down gradually)
+        self.command_limit = None           # training stage: highest commanded speed (set_command_limit)
         self.w = dict(WEIGHTS[version])
         if version >= 5:
             self.w.update(STEADY_TRUNK_V5.get(species, {}))
@@ -189,6 +218,8 @@ class LocomotionEnv(gym.Env):
         if self.body.rear is not None:
             trunk.append(nid(mujoco.mjtObj.mjOBJ_BODY, f"{self.body.rear.name}_rear"))
         self.torso_geoms = set(np.flatnonzero(np.isin(m.geom_bodyid, trunk)).tolist())
+        belly = [i for i in range(m.nbody) if (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, i) or "").startswith(prefix + "abdomen")]
+        self.belly_geoms = set(np.flatnonzero(np.isin(m.geom_bodyid, belly)).tolist())
         self.head_body = nid(mujoco.mjtObj.mjOBJ_BODY, self.body.head_body) if self.body.head_body else None
         self.action_scales = np.array([sc for _, _, sc in self.body.actuator_params()])
         self.passive_qpos = np.array([m.jnt_qposadr[nid(mujoco.mjtObj.mjOBJ_JOINT, n)]
@@ -247,7 +278,8 @@ class LocomotionEnv(gym.Env):
         self.phase = float(rng.uniform())
         self.air_time = np.zeros(self.nlegs)
         self.prev_contact = np.ones(self.nlegs, dtype=bool)
-        self.prev_vx = 0.0
+        self.prev_vx = self.prev_vx_v9 = 0.0
+        self.register_ema = 0.5
         if self.version >= 5:
             self.last_print = np.full((self.nlegs, 2), np.nan)
             self.q_mean = self.data.qpos[self.joint_qpos].copy()
@@ -297,7 +329,8 @@ class LocomotionEnv(gym.Env):
               and u < self.stand_prob + (0.30 if self.version >= 4 else 0.20)):
             v, w = -rng.uniform(0.1, sp.max_backward_speed), 0.0                      # walk backwards
         else:
-            v = rng.uniform(-sp.max_backward_speed, sp.max_speed) if self.version == 1 else rng.uniform(0.1, self.top_speed)
+            top = min(self.top_speed, self.command_limit or self.top_speed)
+            v = rng.uniform(-sp.max_backward_speed, sp.max_speed) if self.version == 1 else rng.uniform(0.1, top)
             w = rng.uniform(-sp.max_turn_rate, sp.max_turn_rate) * (rng.uniform() < (0.7 if self.version == 1 else 0.8))
             if not sp.turn_in_place and abs(v) < sp.min_turn_speed:
                 w *= abs(v) / sp.min_turn_speed
@@ -377,7 +410,7 @@ class LocomotionEnv(gym.Env):
 
         # Contacts
         foot_contact = np.zeros(len(self.foot_geoms), dtype=bool)
-        body_contact = False
+        body_contact = belly_contact = False
         for i in range(d.ncon):
             c = d.contact[i]
             if self.floor_geom not in (c.geom1, c.geom2):
@@ -388,6 +421,8 @@ class LocomotionEnv(gym.Env):
                 foot_contact[hit[0]] = True
             elif other in self.torso_geoms:
                 body_contact = True
+            elif other in self.belly_geoms:
+                belly_contact = True
 
         foot_pos = d.site_xpos[self.foot_sites]
         foot_vel3 = (foot_pos - self.prev_foot_pos) / CONTROL_DT
@@ -432,6 +467,7 @@ class LocomotionEnv(gym.Env):
             # (a plain "fraction of legs matching" would give standing still 55-65 % for free).
             stance_ok = float(np.mean(foot_contact[stance])) if stance.any() else 1.0
             swing_ok = float(np.mean(~foot_contact[swing])) if swing.any() else 1.0
+            gait_score = max(stance_ok + swing_ok - 1.0, 0.0)
             terms["gait"] = w["gait"] * (stance_ok + swing_ok - 1.0)
             if swing.any():
                 height = foot_pos[:, 2] - self.foot_radius
@@ -444,6 +480,7 @@ class LocomotionEnv(gym.Env):
             if "landing" in w:
                 terms["landing"] = w["landing"] * float(np.sum(np.minimum(foot_vel3[touchdown, 2] ** 2, 4.0)))
             t_swing = np.broadcast_to((1 - np.asarray(duty)) / f, (self.nlegs,))
+            taps = int(np.sum(self.air_time[touchdown] < 0.5 * t_swing[touchdown])) if not standing else 0
             if not standing and touchdown.any():
                 terms["air_time"] = w["air_time"] * float(np.sum(np.minimum(self.air_time[touchdown] / t_swing[touchdown], 1.0) - 0.5))
             else:
@@ -460,7 +497,8 @@ class LocomotionEnv(gym.Env):
                 ew = self.effort_weight
                 terms["energy"] = w["energy"] * float(np.sum(ew * np.abs(d.actuator_force[self.act_ids] * qvel))) / self.power_ref
                 terms["joint_acc"] = w["joint_acc"] * float(np.mean(ew * (qacc / 500.0) ** 2))
-                terms["style"] = w["style"] * self._style(leg_phase, duty, f, standing)
+                style_score = self._style(leg_phase, duty, f, standing)
+                terms["style"] = w["style"] * style_score
                 if self.species_name in STEADY_TRUNK_V5:  # steady trunk, not dodged by standing still
                     track = math.exp(-lin_err / sig_v ** 2)
                     terms["roll_pitch"] *= track
@@ -488,6 +526,44 @@ class LocomotionEnv(gym.Env):
 
         reward = sum(v for k, v in terms.items() if k in TASK_TERMS) + self.penalty_scale * float(
             sum(v for k, v in terms.items() if k not in TASK_TERMS))
+        if self.version >= 9:
+            ew = self.effort_weight
+            idle_arms = self.arm_legs & (np.broadcast_to(np.asarray(duty, dtype=float), (self.nlegs,)) <= 0)
+            w_head = (d.cvel[self.head_body][:3] - np.array([0.0, 0.0, self.command[1]])) if self.head_body is not None else None
+            p = dict(
+                energy=float(np.sum(ew * np.abs(d.actuator_force[self.act_ids] * qvel))) / self.power_ref,
+                jerk=float(np.mean(ew * (qacc / 500.0) ** 2)),
+                action_rate=float(np.mean((self.raw - self.last_raw) ** 2)),
+                slip=float(np.sum(np.minimum((foot_vel ** 2).sum(axis=1), 1.0) * foot_contact)),
+                trunk_rock=float(ang[0] ** 2 + ang[1] ** 2),
+                bounce=float(lin[2] ** 2),
+                tilt=float(grav[0] ** 2 + grav[1] ** 2),
+                surge=min(((lin[0] - self.prev_vx_v9) / CONTROL_DT / 2.0) ** 2, 1.0),
+                landing=float(np.sum(np.minimum(foot_vel3[touchdown, 2] ** 2, 4.0))),
+                taps=float(taps),
+                head_steady=float(w_head @ w_head) if w_head is not None else 0.0,
+                head_level=(1.0 - float(d.xmat[self.head_body].reshape(3, 3)[2, 2])) if w_head is not None else 0.0,
+                fidget=min(float(np.mean(qvel ** 2)), 1.0) if standing else 0.0,
+                joint_limit=float(near_limit),
+                belly=float(belly_contact),
+                arm_ground=float(np.sum(foot_contact & idle_arms)),
+                body_contact=float(body_contact))
+            self.prev_vx_v9 = float(lin[0])
+            quality = math.exp(-self.penalty_scale * sum(V9_QUALITY[k] * v for k, v in p.items()))
+            # tolerance grows with the commanded speed / turn: moving a little already earns something, standing
+            # still while walking is commanded earns almost nothing (a fixed wide tolerance let it pay, 13 Oct test)
+            tol_v = (0.5 * abs(self.command[0]) + 0.1) * max(self.track_scale, 0.5)
+            tol_w = (0.5 * abs(self.command[1]) + 0.15) * max(self.track_scale, 0.5)
+            tracking = math.exp(-lin_err / tol_v ** 2) * math.exp(-ang_err / tol_w ** 2)
+            likeness = [gait_score, 1.0 if standing else style_score]
+            if self.arm_legs.any():                         # DC: panther traits
+                likeness.append(self.register_ema)
+                if idle_arms.any():
+                    likeness.append(self._arm_tuck(foot_pos, duty))
+            likeness = float(np.mean(likeness))
+            reward = tracking * (0.4 + 0.6 * likeness) * quality
+            terms.update({"v9_tracking": tracking, "v9_likeness": likeness, "v9_quality": quality})
+            terms.update({f"q_{k}": V9_QUALITY[k] * v for k, v in p.items()})
         self.last_action = a
         if self.version >= 4:
             self.last_raw = self.raw
@@ -648,10 +724,15 @@ class LocomotionEnv(gym.Env):
             if touchdown[hind] and not np.isnan(self.last_print[front, 0]):
                 dist = float(np.linalg.norm(foot_pos[hind, :2] - self.last_print[front]))
                 r += math.exp(-(dist / 0.15) ** 2)
+                self.register_ema += 0.2 * (math.exp(-(dist / 0.15) ** 2) - self.register_ema)
         return r
 
     def set_penalty_scale(self, scale):
         self.penalty_scale = float(scale)
+
+    def set_command_limit(self, speed):
+        """Training stage: commands up to this speed only (walk first, then trot, run, sprint)."""
+        self.command_limit = float(speed)
 
     def set_track_scale(self, scale):
         self.track_scale = float(scale)

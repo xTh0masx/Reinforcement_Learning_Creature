@@ -95,6 +95,8 @@ def main():
     p.add_argument("--sym-weight", type=float, default=1.0, help="mirror-symmetry loss weight (version 2)")
     p.add_argument("--head-weight", type=float, default=1.0,
                    help="scale of the version-3 head steadiness/level penalties (0.1 = ten times weaker)")
+    p.add_argument("--max-command", type=float, default=None,
+                   help="training stage: commanded speeds up to this (walk first, then trot, run, sprint)")
     p.add_argument("--speed-sigma", type=float, default=None,
                    help="fixed speed tracking tolerance in m/s (default 0.5 x max speed x track scale)")
     p.add_argument("--penalty-fixed", type=float, default=None,
@@ -130,6 +132,8 @@ def main():
             tensorboard_log="runs/", seed=args.seed, verbose=1, **algo_kwargs,
         )
     model.loco_version = args.version          # saved with the brain (play_locomotion.brain_version)
+    if args.max_command:
+        env.env_method("set_command_limit", args.max_command)
     if args.version >= 2:
         model.set_mirror(mirror_maps(LocomotionEnv(args.species, version=args.version)))
 
