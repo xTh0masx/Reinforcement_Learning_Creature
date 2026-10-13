@@ -309,7 +309,10 @@ def dc(passive=False, active=False, arms=False, hulls=False):
 # Relative density of body parts (default 1). An insect's abdomen (gaster: air sacs, crop) is much lighter than its
 # muscle-filled thorax; mass by plain volume gave the Myrranox abdomen 54 % of the weight, the centre of mass sat over
 # the hind legs and even a perfect tripod rhythm tipped it back with the front feet in the air (13 Oct).
-HULL_DENSITY = {"myrranox": {"abdomen": 0.5}}
+# 13 Oct (2): at half density the centre of mass still sat so far back that the front legs carried almost nothing and
+# hung in the air during the tripod gait (front claws 1.4 cm above the ground in stance); at 0.25 the front feet are
+# down 40 % of their stance time with the rhythm alone (was 19 %), body level, abdomen 23 % of the weight.
+HULL_DENSITY = {"myrranox": {"abdomen": 0.25}}
 
 
 def hull_mass(spec, bone):
