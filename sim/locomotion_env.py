@@ -140,8 +140,8 @@ V9_QUALITY = dict(
     arm_ground=1.0,     # DC: folded arm on the ground at walking speed
     body_contact=2.0,   # trunk on the ground
     track=1.0,          # DC: paws on the ground wider than the standing pose ((excess / 5 cm)^2)
-    extra_step=1.0,     # per touchdown less than 0.6 gait cycles after the same leg's last one (13 Oct: the DC's hind
-                        # legs stepped 2-4 times per cycle while the front legs stepped once)
+    extra_step=0.0,     # per touchdown less than 0.6 gait cycles after the same leg's last one. Switched off: at 1.0
+                        # the DC stopped stepping with its hind legs altogether and then stopped walking (13 Oct)
     idle_leg=0.5)       # per leg that has not touched the ground for 2 step cycles while walking (13 Oct: the
                         # Myrranox carried both front legs in the air and pushed like a wheelbarrow)
 CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
