@@ -172,7 +172,10 @@ def myrranox(passive=False, active=False, hulls=False):
             p = np.array(pts) if sgn > 0 else _mirror(pts)
             lift = _lift_axis(p, sgn)
             legs.append(Leg(f"{pair}_{side}", p, [(0, np.array([0, 0, 1.0]), (-35, 35)),
-                                                  (1, lift, (-40, 60)), (2, lift, (-50, 50))], 0.018))
+                                                  (1, lift, (-40, 60)), (2, lift, (-50, 50))], 0.018,
+                            # mesh body (v9): the brain may use the knees' full range (+-50 deg) - to carry the
+                            # heavy abdomen the knees wanted more than +-34 deg and got stuck at the limit
+                            action_scale=0.87 if hulls else None))
     torso = [
         '<geom name="thorax" type="capsule" fromto="0.06 0 0.19 0.62 0 0.19" size="0.1" mass="3.5"/>',
     ]
@@ -252,7 +255,9 @@ def dc(passive=False, active=False, arms=False, hulls=False):
             pitch = np.array([0, 1.0, 0])
             legs.append(Leg(f"arm_{side}", p, [(0, abd, (-15, 15)), (0, pitch, (-100, 80)),
                                                (1, pitch, (-110, 110)), (2, pitch, (-90, 90))], 0.04,
-                            seg_radius=DC_LEG_RADII["arm"], mass_scale=0.5, action_scale=1.0))
+                            seg_radius=DC_LEG_RADII["arm"], mass_scale=0.5,
+                            # mesh body: +-103 deg - folding the arms needs elbow 93 / wrist 66 deg (13 Oct)
+                            action_scale=1.8 if hulls else 1.0))
     torso = [
         '<geom name="chest" type="capsule" fromto="-0.25 0 0.66 0.50 0 0.74" size="0.21" mass="35"/>',
     ]
