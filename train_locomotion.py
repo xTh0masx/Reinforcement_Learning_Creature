@@ -95,6 +95,9 @@ def main():
     p.add_argument("--sym-weight", type=float, default=1.0, help="mirror-symmetry loss weight (version 2)")
     p.add_argument("--head-weight", type=float, default=1.0,
                    help="scale of the version-3 head steadiness/level penalties (0.1 = ten times weaker)")
+    p.add_argument("--reset-reward-norm", action="store_true",
+                   help="when resuming into a different reward: restart the reward normalisation statistics (the old "
+                        "ones would make the new rewards look like noise - 13 Oct, v9 stage 1)")
     p.add_argument("--max-command", type=float, default=None,
                    help="training stage: commanded speeds up to this (walk first, then trot, run, sprint)")
     p.add_argument("--speed-sigma", type=float, default=None,
@@ -116,6 +119,11 @@ def main():
     if args.resume:
         from play_locomotion import vecnormalize_path          # models/<run> or checkpoints/<run>_<N>_steps
         env = VecNormalize.load(vecnormalize_path(args.resume), env)
+        if args.reset_reward_norm:
+            from stable_baselines3.common.running_mean_std import RunningMeanStd
+            env.ret_rms = RunningMeanStd(shape=())
+            env.returns[:] = 0.0
+            print("reward normalisation statistics reset", flush=True)
         model = algo.load(args.resume, env=env, tensorboard_log="runs/")
         print(f"resumed {args.resume} at {model.num_timesteps} steps", flush=True)
         model.save(f"checkpoints/{run}_{model.num_timesteps}_steps")      # the starting brain, for the progress video
