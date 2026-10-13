@@ -67,6 +67,12 @@ def build(species):
         move = p[:, 0] < x if side == "behind" else p[:, 0] >= x
         parts[dst] = np.vstack([parts[dst], p[move]])
         parts[src] = p[~move]
+    # the meshes are not perfectly symmetric (Myrranox front-left claw 3 cm higher than the right one): the right
+    # limbs are mirror images of the left ones, so the physics body is exactly symmetric (mirror-symmetry training)
+    for bone in [b for b in parts if "_R_s" in b]:
+        left = parts.get(bone.replace("_R_s", "_L_s"))
+        if left is not None:
+            parts[bone] = left * np.array([1.0, -1.0, 1.0])
     out = {}
     for bone, p in parts.items():
         if bone in SPIKY[species]:

@@ -353,7 +353,7 @@ def _foot_site(spec, leg):
 # Found with calibrate_springref() (python -m sim.bodies --springref).
 MYR_SPRINGREF = {"abdomen_p0x": 15.34, "head_p0x": -5.68}
 # mesh bodies (walking v8/v9): calibrate_springref(..., hulls=True) residuals added on 13 Oct 2026
-MYR_HULL_SPRINGREF = {"abdomen_p0x": 4.50, "head_p0x": -3.86}   # abdomen carried ~5 deg above the model pose (it would otherwise rest on the ground)
+MYR_HULL_SPRINGREF = {"abdomen_p0x": 19.30, "head_p0x": -3.86}   # abdomen: 14.3 deg gravity sag (4.32 kg, COM 0.34 m behind the joint, 57.6 Nm/rad) + 5 deg carried up
 DC_SPRINGREF = {"spine_px": -1.89, "tail_p0x": 16.85, "tail_p1x": 12.91, "neck_p0x": -5.5, "neck_p1x": -5.85, "arm_L_p0x": -9.19}
 # walking v8 mesh body (heavier neck, rear body with its real volume): calibrate_springref("dc", active=True,
 # arms=True, hulls=True) residuals added to DC_SPRINGREF on 30 Sep 2026

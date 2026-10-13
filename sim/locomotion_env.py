@@ -99,6 +99,12 @@ WEIGHTS[6] = dict(WEIGHTS[5],
 TASK_TERMS = ("lin", "ang", "gait", "clearance", "air_time", "style", "register", "arm_tuck")
 ARM_TUCK = (0.80, 0.20, 0.42)   # version 6: folded claw position in the torso frame (y mirrored per side)
 ANKLE_FOLD = 0.3                # version 6: ankle / wrist fold in mid-swing (rad); flat (no rhythm) in stance
+# version 9: natural standing pose = the neutral position the brain's commands work around (13 Oct: on the mesh bodies
+# the brains pushed joints to their limits just to hold the right stance, leaving no range for walking)
+# m the body is raised per leg pair (feet stay put): the Myrranox carries its heavy abdomen (hind legs brace higher,
+# else it tips nose-up and the front feet lift; tested 13 Oct: level, all six feet down, abdomen clear)
+STAND_TALLER = {"myrranox": {"front": 0.06, "mid": 0.06, "back": 0.12},
+                "dc": {"front": 0.03, "hind": 0.0}}       # DC: trunk level (nose-down 5.5 -> 4.1 deg), arms folded
 WEIGHTS[7] = dict(WEIGHTS[6])
 WEIGHTS[8] = dict(WEIGHTS[6],
                   # no unnecessary movement (owner, 30 Sep)
@@ -231,8 +237,11 @@ class LocomotionEnv(gym.Env):
         self.init_qpos = self.data.qpos.copy()
         self.rest_joints = self.init_qpos[self.joint_qpos].copy()
         self.power_ref = self.body.mass * 9.81 * self.species.walk_speed
+        self.neutral = np.zeros(self.nj)       # version 9: joint offsets of the natural standing pose
         if version >= 5:
             self._init_style()
+        if version >= 9:
+            self._init_neutral()
 
         obs_size = 3 + 3 + 3 + 1 + 3 * self.nj + 2 + (2 * self.nlegs + 1 if version >= 2 else 0)
         self.observation_space = spaces.Box(-np.inf, np.inf, shape=(obs_size,), dtype=np.float32)
@@ -254,7 +263,7 @@ class LocomotionEnv(gym.Env):
             d = self.data
             x, y = options.get("pos", (0.0, 0.0)) if options else (0.0, 0.0)
             d.qpos[q0:q0 + 7] = [x, y, self.init_qpos[q0 + 2], math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)]
-            d.qpos[self.joint_qpos] = self.rest_joints + noise
+            d.qpos[self.joint_qpos] = self.init_qpos[self.joint_qpos] + noise
             d.qvel[v0:v0 + 6] = 0.0
             d.qvel[self.joint_qvel] = 0.0
             d.ctrl[self.act_ids] = d.qpos[self.joint_qpos]
@@ -376,7 +385,7 @@ class LocomotionEnv(gym.Env):
         if self.version == 7:                   # step generator + the brain's correction
             target = self.rest_joints + self.cpg_targets() + a * CPG_RESIDUAL
         else:
-            target = self.rest_joints + a * self.action_scales
+            target = self.rest_joints + self.neutral + a * self.action_scales
         self.data.ctrl[self.act_ids] = np.clip(target, self.joint_lo, self.joint_hi)
         return a
 
@@ -669,6 +678,67 @@ class LocomotionEnv(gym.Env):
             self.tuck_error = best
         foot_body()
         self.last_print = np.full((self.nlegs, 2), np.nan)
+
+    def _init_neutral(self):
+        """Version 9: the natural standing pose. Myrranox: every leg's lift / knee joints chosen so the foot sits
+        STAND_TALLER lower relative to the body (the body rises, the feet stay put). DC: arms folded (tuck pose).
+        The episode start pose and the standing height follow."""
+        m, d = self.model, self.data
+        nj = len(self.body.legs[0].joints)
+        R = d.xmat[self.torso_body].reshape(3, 3)
+
+        def foot_body():
+            mujoco.mj_kinematics(m, d)
+            return (d.site_xpos[self.foot_sites] - d.xpos[self.torso_body]) @ R
+
+        def set_pose(offset):
+            d.qpos[self.joint_qpos] = self.rest_joints + offset
+
+        base = foot_body()
+        rise = STAND_TALLER.get(self.species_name, 0.0)
+        for i, leg in enumerate(self.body.legs):
+            if self.arm_legs[i]:
+                self.neutral[i * nj:(i + 1) * nj] = self.tuck_pose[i]
+                continue
+            if not rise:
+                continue
+            idx = [i * nj + 1, i * nj + 2]                       # lift + knee
+            r = rise[leg.name.split("_")[0]] if isinstance(rise, dict) else rise
+            goal = base[i].copy()                                # every foot on the same floor level (the
+            goal[2] = base[self.is_leg, 2].min() - r             # model's front claws sit 3 cm higher)
+            q = np.zeros(2)
+
+            def cost(qq):
+                off = self.neutral.copy()
+                off[idx] = qq
+                set_pose(off)
+                return float(np.linalg.norm(foot_body()[i] - goal))
+            best = cost(q)
+            for step in (0.2, 0.1, 0.05, 0.02, 0.01):
+                improved = True
+                while improved:
+                    improved = False
+                    for k in range(2):
+                        for sgn in (1, -1):
+                            trial = q.copy()
+                            trial[k] += sgn * step
+                            c = cost(trial)
+                            if c < best - 1e-5:
+                                best, q, improved = c, trial, True
+            self.neutral[idx] = q
+        for i, leg in enumerate(self.body.legs):             # mirror: the right side copies the left side
+            if leg.name.endswith("_R"):
+                src = self.leg_names.index(leg.name[:-1] + "L")
+                self.neutral[i * nj:(i + 1) * nj] = self.neutral[src * nj:(src + 1) * nj]
+        set_pose(np.zeros(self.nj))
+        z_rest = foot_body()[self.is_leg, 2].min()
+        set_pose(self.neutral)
+        z_neutral = foot_body()[self.is_leg, 2].min()
+        self.init_qpos[self.joint_qpos] = self.rest_joints + self.neutral
+        self.init_qpos[self.q0 + 2] += z_rest - z_neutral            # feet stay on the floor
+        self.stand_z = float(self.init_qpos[self.q0 + 2])
+        d.qpos[:] = self.init_qpos
+        mujoco.mj_forward(m, d)
 
     def style_reference(self, leg_phase, duty, f, standing):
         """Reference offsets from the rest pose for the sweep and knee joints (rad), or None while standing."""
