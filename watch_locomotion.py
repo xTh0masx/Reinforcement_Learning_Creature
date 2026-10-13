@@ -25,6 +25,8 @@ def main():
     p.add_argument("--run", required=True)
     p.add_argument("--species", required=True)
     p.add_argument("--poll", type=float, default=10.0, help="seconds between checks for a new checkpoint")
+    p.add_argument("--version", type=int, default=None,
+                   help="body / env version to show (a resumed run's first checkpoint still carries the old version)")
     args = p.parse_args()
 
     print(f"waiting for the first checkpoint of {args.run} ...")
@@ -32,7 +34,7 @@ def main():
         time.sleep(args.poll)
     steps, loaded = checkpoints(args.run)[-1]
     brain = Brain(loaded, args.species)
-    env = LocomotionEnv(args.species, episode_seconds=1e9, version=brain.version)
+    env = LocomotionEnv(args.species, episode_seconds=1e9, version=args.version or brain.version)
     obs, _ = env.reset(seed=0, options={"command": (0.0, 0.0)})
     print(f"now showing {args.run} @ {fmt_steps(steps)}")
     script = command_script(args.species)
