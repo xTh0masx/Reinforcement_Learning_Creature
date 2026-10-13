@@ -24,3 +24,7 @@ Thumbs.db
 
 # Rendered frames (large, reproducible)
 renders/
+sim/_coacd_cache/
+sim/dc_sculpt_mesh.npz
+sim/dc_parts_sculpt.json
+sim/dc_parts_full.json

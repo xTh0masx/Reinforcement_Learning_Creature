@@ -121,7 +121,7 @@ WEIGHTS[8] = dict(WEIGHTS[6],
 MAX_TILT_V8 = 25.0           # deg: a trunk tilted further counts as a fall (the "handstand" had ~20 deg nose down)
 WEIGHTS[9] = dict(WEIGHTS[8])
 WEIGHTS[10] = dict(WEIGHTS[9])
-WEIGHTS[11] = dict(WEIGHTS[9])  # (the term values are still computed for analysis; v9 scores with V9_QUALITY)
+WEIGHTS[11] = WEIGHTS[12] = dict(WEIGHTS[9])  # (the term values are still computed for analysis; v9 scores with V9_QUALITY)
 # version 9 quality factor: exp(-penalty_scale * sum(c * p)); p = normalised penalty, c = how much it shrinks the points
 V9_QUALITY = dict(
     energy=0.08,        # mechanical power / (m g v_walk) (knee mostly exempt)
@@ -147,9 +147,18 @@ V9_QUALITY = dict(
                         # the DC stopped stepping with its hind legs altogether and then stopped walking (13 Oct)
     idle_leg=0.5)       # per leg that has not touched the ground for 2 step cycles while walking (13 Oct: the
                         # Myrranox carried both front legs in the air and pushed like a wheelbarrow)
+# version 12 (DC): the owner's reference movement, a wolf walk cycle (13 Oct). Seen in it: each leg steps once per cycle
+# (front and hind at the same rate), 2-3 paws always on the ground, paws lifted low with the front wrist folding under in
+# the swing, back level, head low and forward. Added to the likeness (0..1 scores) and the quality costs.
+V12_QUALITY = dict(V9_QUALITY,
+    support=1.0,        # walking with fewer than two paws on the ground (a wolf's walk never leaves the ground)
+    high_step=0.5)      # swing paw higher than WOLF_LIFT ((excess / 5 cm)^2)
+WOLF_LIFT = 0.08             # m: highest paw lift in the wolf's walk scaled to the DC (~12 % of leg height)
+WOLF_HEAD_DZ = 0.75          # m: head (neck_s1 origin) above the torso origin (which is at floor level for the DC);
+                             # the DC holds it at 0.87 m - the wolf carries its head lower, about at its back's height
 CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
 ACTIVE = {7: {"myrranox": False, "dc": True}, 8: {"myrranox": False, "dc": True}, 9: {"myrranox": False, "dc": True},
-          10: {"myrranox": False, "dc": True}, 11: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
+          10: {"myrranox": False, "dc": True}, 11: {"myrranox": False, "dc": True}, 12: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
           5: {"myrranox": False, "dc": True}, 6: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
 # version 5 leg style per species: (sweep joint index, knee joint index, knee fold rad, max sweep rad)
 STYLE = {"myrranox": (0, 2, 0.8, 0.45), "dc": (1, 2, 0.6, 0.7)}
@@ -169,7 +178,8 @@ SLOW_DOWN = 1.0              # m/s^2
 def body_for(species, version, passive=False):
     """The body a walking brain of this version controls."""
     if version >= 6 and species == "dc":
-        body = BODIES[species](passive=True, active=True, arms=True, hulls=version >= 8, lean=version >= 11)
+        body = BODIES[species](passive=True, active=True, arms=True, hulls=version >= 8, lean=version >= 11,
+                                detailed=version >= 12)
     elif version >= 9:
         body = BODIES[species](passive=True, hulls=True)
     elif ACTIVE.get(version, {}).get(species, False):
@@ -231,6 +241,9 @@ class LocomotionEnv(gym.Env):
         self.leg_names = [leg.name for leg in self.body.legs]
         self.is_leg = np.array([leg.mass_scale == 1.0 for leg in self.body.legs])     # False: the DC's arms
         self.nlegs = len(self.leg_names)
+        self.front_legs = np.array([n.startswith("front") for n in self.leg_names])      # version 12 (DC)
+        self.hind_legs = np.array([n.startswith("hind") for n in self.leg_names])
+        self.paw_bodies = np.array([nid(mujoco.mjtObj.mjOBJ_BODY, f"{n}_s2") for n in self.leg_names])             if self.front_legs.any() else np.zeros(0, int)
         self.foot_geoms = np.array([nid(mujoco.mjtObj.mjOBJ_GEOM, n) for n in self.body.foot_names])
         self.foot_sites = np.array([nid(mujoco.mjtObj.mjOBJ_SITE, n) for n in self.body.foot_names])
         self.foot_radius = np.where(m.geom_type[self.foot_geoms] == mujoco.mjtGeom.mjGEOM_MESH, 0.0,
@@ -308,6 +321,7 @@ class LocomotionEnv(gym.Env):
         self.since_ground = np.zeros(self.nlegs)
         self.since_touchdown = np.full(self.nlegs, 10.0)
         self.register_ema = 0.5
+        self.step_rate = np.zeros(self.nlegs)        # version 12: touchdowns per second per leg (EMA, ~2 s)
         if self.version >= 5:
             self.last_print = np.full((self.nlegs, 2), np.nan)
             self.q_mean = self.data.qpos[self.joint_qpos].copy()
@@ -583,9 +597,18 @@ class LocomotionEnv(gym.Env):
                 track=self._track_width(foot_pos, foot_contact),
                 idle_leg=float(np.sum(self.is_leg & (self.since_ground > 2.0 / f))) if not standing else 0.0,
                 extra_step=float(np.sum(touchdown & self.is_leg & (self.since_touchdown < 0.6 / f))) if not standing else 0.0)
+            wolf = self.version >= 12 and self.front_legs.any()
+            if wolf:
+                walking = not standing and abs(self.command[0]) > 0.1
+                self.step_rate += (CONTROL_DT / 2.0) * (touchdown / CONTROL_DT - self.step_rate)
+                lift = foot_pos[:, 2] - self.foot_radius
+                swing_legs = self.is_leg & ~foot_contact
+                p["support"] = float(walking and np.sum(foot_contact & self.is_leg) < 2)
+                p["high_step"] = float(np.sum((np.maximum(lift[swing_legs] - WOLF_LIFT, 0.0) / 0.05) ** 2)) if walking else 0.0
             self.since_touchdown = np.where(touchdown, 0.0, self.since_touchdown)
             self.prev_vx_v9 = float(lin[0])
-            quality = math.exp(-self.penalty_scale * sum(V9_QUALITY[k] * v for k, v in p.items()))
+            qw = V12_QUALITY if self.version >= 12 else V9_QUALITY
+            quality = math.exp(-self.penalty_scale * sum(qw[k] * v for k, v in p.items()))
             # tolerance grows with the commanded speed / turn: moving a little already earns something, standing
             # still while walking is commanded earns almost nothing (a fixed wide tolerance let it pay, 13 Oct test)
             tol_v = (0.5 * abs(self.command[0]) + 0.1) * max(self.track_scale, 0.5)
@@ -596,6 +619,8 @@ class LocomotionEnv(gym.Env):
                 likeness.append(self.register_ema)
                 if idle_arms.any():
                     likeness.append(self._arm_tuck(foot_pos, duty))
+                if wolf:
+                    likeness += self._wolf(foot_pos, foot_contact, walking)
             likeness = float(np.mean(likeness))
             # moving like the animal counts: a creature on speed but in the wrong rhythm keeps 20 % (was 40 %)
             reward = tracking * (0.2 + 0.8 * likeness) * quality
@@ -606,7 +631,7 @@ class LocomotionEnv(gym.Env):
                 reward += self.walk_help * 0.3 * progress
                 terms["v9_walk_help"] = self.walk_help * 0.3 * progress
             terms.update({"v9_tracking": tracking, "v9_likeness": likeness, "v9_quality": quality})
-            terms.update({f"q_{k}": V9_QUALITY[k] * v for k, v in p.items()})
+            terms.update({f"q_{k}": qw[k] * v for k, v in p.items()})
         self.last_action = a
         if self.version >= 4:
             self.last_raw = self.raw
@@ -843,6 +868,26 @@ class LocomotionEnv(gym.Env):
         rel = (foot_pos[idle] - self.data.xpos[self.torso_body]) @ R
         dist = np.linalg.norm(rel - self.tuck_target[idle], axis=1)
         return float(np.mean(np.exp(-(dist / 0.25) ** 2)))
+
+    def _wolf(self, foot_pos, foot_contact, walking):
+        """Version 12, DC: likeness scores (0..1) from the wolf reference - same step rate front and hind, front wrist
+        folded under in the swing, head low and forward."""
+        d = self.data
+        R = d.xmat[self.torso_body].reshape(3, 3)
+        head_dz = float(((d.xpos[self.head_body] - d.xpos[self.torso_body]) @ R)[2]) if self.head_body is not None else WOLF_HEAD_DZ
+        head = math.exp(-((head_dz - WOLF_HEAD_DZ) / 0.08) ** 2)
+        if not walking:
+            return [head]
+        front, hind = self.step_rate[self.front_legs].mean(), self.step_rate[self.hind_legs].mean()
+        rhythm = math.exp(-(math.log(max(hind, 0.1) / max(front, 0.1)) / 0.3) ** 2)
+        swing = self.front_legs & ~foot_contact & (self.air_time > 0.06)
+        if swing.any():
+            # paw tip behind the wrist (body frame x) = wrist folded under; flat paw (tip in front) = 0
+            rel = (foot_pos[swing] - d.xpos[self.paw_bodies[swing]]) @ R
+            fold = float(np.mean(np.clip(-rel[:, 0] / 0.08 + 0.5, 0.0, 1.0)))
+        else:
+            fold = 0.5
+        return [rhythm, fold, head]
 
     def _register(self, foot_pos, touchdown, standing):
         """Panther walk: each hind paw lands close to where the front paw of the same side last stood."""

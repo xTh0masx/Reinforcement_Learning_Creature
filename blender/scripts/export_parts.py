@@ -6,6 +6,7 @@ Writes sim/<species>_parts.json: {bone: [[x, y, z], ...]} (at most 4000 points e
 
     blender -b blender/habitat_showcase.blend --python blender/scripts/export_parts.py -- dc
     blender -b blender/habitat_showcase.blend --python blender/scripts/export_parts.py -- myrranox
+    blender -b blender/habitat_showcase.blend --python blender/scripts/export_parts.py -- dc 20000 _full   # all detail
 """
 import json
 import os
@@ -18,7 +19,11 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 MAX_POINTS = 4000
 RIGS = {"dc": ("DC_rig", "DC_body_proxy"), "myrranox": ("Myrranox_rig", None)}
 
-species = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "dc"
+args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else ["dc"]
+species = args[0]
+if len(args) > 1:                                  # optional: points per part and output suffix (full resolution)
+    MAX_POINTS = int(args[1])
+SUFFIX = args[2] if len(args) > 2 else ""
 rig_name, skinned = RIGS[species]
 arm = bpy.data.objects[rig_name]
 arm.data.pose_position = "REST"
@@ -45,6 +50,6 @@ for bone, pts in parts.items():
         pts = pts[rng.choice(len(pts), MAX_POINTS, replace=False)]
     out[bone] = np.round(pts, 4).tolist()
     print(f"PARTS {bone:12s} {len(parts[bone]):6d} vertices")
-with open(os.path.join(REPO, "sim", f"{species}_parts.json"), "w") as f:
+with open(os.path.join(REPO, "sim", f"{species}_parts{SUFFIX}.json"), "w") as f:
     json.dump(out, f)
-print(f"PARTS wrote sim/{species}_parts.json")
+print(f"PARTS wrote sim/{species}_parts{SUFFIX}.json")
