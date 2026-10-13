@@ -182,6 +182,7 @@ class LocomotionEnv(gym.Env):
         self.top_speed = SPRINT_SPEED.get(species, SPECIES[species].max_speed) if version >= 8 else SPECIES[species].max_speed
         self.ramp_all = version >= 8        # every command change ramps (speed up / slow down gradually)
         self.command_limit = None           # training stage: highest commanded speed (set_command_limit)
+        self.walk_help = 0.0                # training start-up help: bonus for forward progress (set_walk_help)
         self.w = dict(WEIGHTS[version])
         if version >= 5:
             self.w.update(STEADY_TRUNK_V5.get(species, {}))
@@ -575,6 +576,12 @@ class LocomotionEnv(gym.Env):
             likeness = float(np.mean(likeness))
             # moving like the animal counts: a creature on speed but in the wrong rhythm keeps 20 % (was 40 %)
             reward = tracking * (0.2 + 0.8 * likeness) * quality
+            if self.walk_help > 0 and abs(self.command[0]) > 0.1:
+                # start-up help (owner, 13 Oct: "help the Myrranox a little bit for walking"): every bit of progress in
+                # the commanded direction pays, whatever the tempo or style; standing still never earns it. Faded out.
+                progress = float(np.clip(lin[0] * np.sign(self.command[0]) / abs(self.command[0]), 0.0, 1.0))
+                reward += self.walk_help * 0.3 * progress
+                terms["v9_walk_help"] = self.walk_help * 0.3 * progress
             terms.update({"v9_tracking": tracking, "v9_likeness": likeness, "v9_quality": quality})
             terms.update({f"q_{k}": V9_QUALITY[k] * v for k, v in p.items()})
         self.last_action = a
@@ -830,6 +837,10 @@ class LocomotionEnv(gym.Env):
 
     def set_penalty_scale(self, scale):
         self.penalty_scale = float(scale)
+
+    def set_walk_help(self, scale):
+        """Training start-up help: weight of the forward-progress bonus (1 at the start, faded to 0)."""
+        self.walk_help = float(scale)
 
     def set_command_limit(self, speed):
         """Training stage: commands up to this speed only (walk first, then trot, run, sprint)."""

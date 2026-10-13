@@ -39,6 +39,24 @@ class TrackingCurriculum(BaseCallback):
         return True
 
 
+class WalkHelp(BaseCallback):
+    """Start-up help: the forward-progress bonus (LocomotionEnv.set_walk_help) fades from 1 to 0 over `steps`."""
+
+    def __init__(self, steps):
+        super().__init__()
+        self.steps, self.t0 = steps, None
+
+    def _on_rollout_start(self):
+        if self.t0 is None:
+            self.t0 = self.num_timesteps
+        scale = max(0.0, 1.0 - (self.num_timesteps - self.t0) / self.steps)
+        self.training_env.env_method("set_walk_help", scale)
+        self.logger.record("train/walk_help", scale)
+
+    def _on_step(self):
+        return True
+
+
 class StuckJoints(BaseCallback):
     """Warn when a joint's mean command drifts beyond the action limit (clipped -> no learning signal; this froze the
     Myrranox knees in v2-v4). Logs the number of stuck joints and prints their names."""
@@ -98,6 +116,8 @@ def main():
     p.add_argument("--reset-reward-norm", action="store_true",
                    help="when resuming into a different reward: restart the reward normalisation statistics (the old "
                         "ones would make the new rewards look like noise - 13 Oct, v9 stage 1)")
+    p.add_argument("--walk-help", type=float, default=None,
+                   help="start-up help: forward-progress bonus faded out over this many steps")
     p.add_argument("--max-command", type=float, default=None,
                    help="training stage: commanded speeds up to this (walk first, then trot, run, sprint)")
     p.add_argument("--speed-sigma", type=float, default=None,
@@ -154,6 +174,8 @@ def main():
                  StuckJoints(LocomotionEnv(args.species, version=args.version).body.joint_names)]
     if args.version >= 4:
         callbacks.append(TrackingCurriculum(int(args.steps), end=args.track_end, start=args.track_start))
+    if args.walk_help:
+        callbacks.append(WalkHelp(int(args.walk_help)))
     callbacks = CallbackList(callbacks)
     model.learn(total_timesteps=int(args.steps), tb_log_name=run, callback=callbacks,
                 reset_num_timesteps=not args.resume)
