@@ -1,0 +1,32 @@
+[
+  {
+    "brain": "models/myr_legs_v5",
+    "version": 5,
+    "range_of_motion_deg": {
+      "hip swing": 24.4,
+      "leg lift": 20.8,
+      "knee": 20.2
+    },
+    "foot_lift_cm": 13.092613362719394,
+    "steps_per_s": 2.8333333333333335,
+    "stride_m": 0.20740977199821664,
+    "duty": 0.43166666666666664,
+    "body_bob_cm": 2.148950563306215,
+    "speed": 0.5876610206616139
+  },
+  {
+    "brain": "models/myr_legs_v10",
+    "version": 10,
+    "range_of_motion_deg": {
+      "hip swing": 27.9,
+      "leg lift": 12.4,
+      "knee": 59.8
+    },
+    "foot_lift_cm": 11.033669746763785,
+    "steps_per_s": 3.7083333333333335,
+    "stride_m": 0.14645404220661498,
+    "duty": 0.4508333333333333,
+    "body_bob_cm": 1.3694818251051732,
+    "speed": 0.5431004065161973
+  }
+]
