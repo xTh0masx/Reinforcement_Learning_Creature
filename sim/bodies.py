@@ -92,6 +92,7 @@ class BodySpec:
     rear: object = None                              # RearSegment (stage 2 DC spine)
     head_body: str = ""                              # body whose steadiness is rewarded (stage 2)
     hulls: dict = None      # walking v8 (DC): {bone: {"vertices": body-frame points, "volume": m^3}} from the mesh
+    lean: bool = False      # walking v11 (DC): big-cat mass distribution + rounded paw pads (see dc(lean=True))
 
     @property
     def joint_names(self):
@@ -226,7 +227,7 @@ _DC_ARM_LEFT = [(0.62, 0.20, 0.61), (0.79, 0.19, 0.44), (1.02, 0.20, 0.32), (1.0
 DC_LEG_RADII = {"hind": (0.075, 0.05, 0.04), "front": (0.07, 0.05, 0.04), "arm": (0.055, 0.045, 0.04)}
 
 
-def dc(passive=False, active=False, arms=False, hulls=False):
+def dc(passive=False, active=False, arms=False, hulls=False, lean=False):
     """passive=True: tail (2 segments), neck + head and the two extra arms on spring-damper joints (stage 1).
     The chain points are the DC_rig bones tail_1/2, neck, head, arm_L/R, so the proxy mesh follows directly.
     active=True (stage 2, walking v3): a spine joint splits the chest - the rear body carries hind legs and tail -
@@ -236,7 +237,7 @@ def dc(passive=False, active=False, arms=False, hulls=False):
     hulls=True (walking v8): every part is a convex hull cut from the real DC mesh (sim/hulls.py) instead of
     capsules; the paws (with claws) are the feet; the 60 kg are distributed by hull volume."""
     passive = passive or active or arms
-    SR = DC_HULL_SPRINGREF if hulls else DC_SPRINGREF      # spring rest angles for the part masses in use
+    SR = DC_LEAN_SPRINGREF if lean else DC_HULL_SPRINGREF if hulls else DC_SPRINGREF   # spring rest angles
     active = active or arms
     legs = []
     abd_range = (-8, 8) if arms else (-25, 25)
@@ -295,7 +296,7 @@ def dc(passive=False, active=False, arms=False, hulls=False):
         from sim.hulls import load
         hull_data = load("dc")
         torso = []                                   # the torso / rear / neck / tail shapes come from the hulls
-    return BodySpec("dc", mass=60.0, torso_geoms=torso, legs=legs, hulls=hull_data,
+    return BodySpec("dc", mass=60.0, torso_geoms=torso, legs=legs, hulls=hull_data, lean=lean and hulls,
                     kp=300.0, max_torque=150.0, joint_damping=3.0, action_scale=0.6, stand_height=0.0, passive=chains,
                     rear=RearSegment("spine", (0.12, 0, 0.70),
                                      [("px", PITCH, 1500.0, SR.get("spine_px", 0.0), 20.0),
@@ -315,8 +316,23 @@ def dc(passive=False, active=False, arms=False, hulls=False):
 HULL_DENSITY = {"myrranox": {"abdomen": 0.25}}
 
 
+# DC walking v11 ("lean" body, owner 13 Oct: "the DC mesh is too clunky to move fluidly"): mass by volume made the DC
+# extremely head-heavy (neck + head 21 %, trunk 37 %, centre of mass 32 cm in front of mid-body, almost over the front
+# paws). Big-cat distribution instead: trunk 55 %, neck + head 9 %, front legs 12 %, hind legs 15 %, arms 6 %, tail 3 %
+# (each limb: upper 60 %, middle 28 %, paw 12 %). The hull shapes stay; only the masses change.
+_LIMB = (0.60, 0.28, 0.12)
+DC_LEAN_MASS = {"torso": 0.32, "spine_rear": 0.23, "neck": 0.05, "head": 0.04, "tail_1": 0.02, "tail_2": 0.01}
+for _side in "LR":
+    for _limb, _share in (("hind", 0.075), ("front", 0.06), ("arm", 0.03)):
+        for _i, _f in enumerate(_LIMB):
+            DC_LEAN_MASS[f"{_limb}_{_side}_s{_i}"] = _share * _f
+PAW_PAD_RADIUS = 0.035      # m: rounded pad along the paw sole (contact geometry instead of the claw hull)
+
+
 def hull_mass(spec, bone):
-    """Mass of a hull part: the creature's mass shared by volume x relative density."""
+    """Mass of a hull part: the creature's mass shared by volume x relative density (DC v11: fixed share)."""
+    if getattr(spec, "lean", False):
+        return spec.mass * DC_LEAN_MASS[bone]
     dens = HULL_DENSITY.get(spec.name, {})
     weighted = {b: h["volume"] * dens.get(b, 1.0) for b, h in spec.hulls.items()}
     return spec.mass * weighted[bone] / sum(weighted.values())
@@ -357,8 +373,23 @@ def creature_assets(spec, prefix=""):
     return "".join(out)
 
 
+def _paw_pad(spec, leg):
+    """DC v11: rounded pad along the paw sole (from the paw's middle to its tip), its bottom on the paw hull's lowest
+    point - the paw rolls over it instead of catching on the claw tips. Returns (from, to, site) in the paw frame."""
+    p = np.asarray(leg.points, float)
+    a = p[2] + 0.35 * (p[3] - p[2]) - p[2]
+    b = p[3] - p[2]
+    low = spec.hulls[f"{leg.name}_s2"]["min"][2] - p[2][2]
+    dz = (low + PAW_PAD_RADIUS) - min(a[2], b[2])
+    a, b = a + [0, 0, dz], b + [0, 0, dz]
+    tip = (a if a[2] < b[2] else b) - [0, 0, PAW_PAD_RADIUS]
+    return a, b, tip
+
+
 def _foot_site(spec, leg):
     """Lowest point of the paw hull, relative to the paw body (the foot's contact point at rest)."""
+    if getattr(spec, "lean", False):
+        return _paw_pad(spec, leg)[2]
     v = np.asarray(spec.hulls[f"{leg.name}_s2"]["vertices"])
     return v[np.argmin(v[:, 2])] - np.asarray(leg.points[2], float)
 
@@ -371,6 +402,7 @@ MYR_HULL_SPRINGREF = {"abdomen_p0x": 19.30, "head_p0x": -3.86}   # abdomen: 14.3
 DC_SPRINGREF = {"spine_px": -1.89, "tail_p0x": 16.85, "tail_p1x": 12.91, "neck_p0x": -5.5, "neck_p1x": -5.85, "arm_L_p0x": -9.19}
 # walking v8 mesh body (heavier neck, rear body with its real volume): calibrate_springref("dc", active=True,
 # arms=True, hulls=True) residuals added to DC_SPRINGREF on 30 Sep 2026
+DC_LEAN_SPRINGREF = {"spine_px": -2.72, "tail_p0x": 14.33, "tail_p1x": 10.61, "neck_p0x": -5.72, "neck_p1x": -6.5, "arm_L_p0x": -9.19}      # recalibrated below
 DC_HULL_SPRINGREF = {"spine_px": -1.42, "tail_p0x": 12.68, "tail_p1x": 10.72, "neck_p0x": -4.08, "neck_p1x": -6.32,
                      "arm_L_p0x": -9.19}
 
@@ -462,7 +494,11 @@ def _leg_xml(leg, leg_mass, damp, offset=(0.0, 0.0, 0.0), spec=None):
         joints = "".join(f'<joint name="{leg.name}_j{k}" axis="{_fmt(axis)}" range="{lo} {hi}" {damp}/>'
                          for k, (seg, axis, (lo, hi)) in enumerate(leg.joints) if seg == i)
         rad = leg.seg_radius[i] if leg.seg_radius else leg.radius
-        if spec is not None and spec.hulls:
+        if spec is not None and spec.hulls and i == 2 and spec.lean:
+            a, b, _ = _paw_pad(spec, leg)
+            geom = (f'<geom name="{leg.name}_foot" type="capsule" fromto="{_fmt(a)} {_fmt(b)}" size="{PAW_PAD_RADIUS}" '
+                    f'mass="{hull_mass(spec, f"{leg.name}_s2"):.4f}" friction="1.2 0.02 0.001" class="creature"/>')
+        elif spec is not None and spec.hulls:
             geom = _hull_geom(spec, f"{leg.name}_s{i}", origin, name=f"{leg.name}_foot" if i == 2 else None)
         else:
             geom = (f'<geom type="capsule" fromto="{_fmt(seg_from)} {_fmt(seg_to)}" size="{rad}" '

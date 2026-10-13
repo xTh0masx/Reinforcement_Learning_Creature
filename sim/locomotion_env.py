@@ -51,6 +51,8 @@ version=10 Myrranox: as version 9, plus the step generator (as in v7, owner 13 O
            legs correctly"): joint target = rest + standing pose + tripod rhythm from the gait clock (hip sweep, knee
            fold) + the brain's correction (CPG_RESIDUAL_V10 x action). A hexapod tripod is statically stable, so the
            rhythm alone already walks (0.37 m/s, no falls, tested); the brain learns balance, steering and details.
+version=11 DC: as version 9 on the "lean" body (sim/bodies.py dc(lean=True)): big-cat mass distribution instead of mass
+           by volume (it was head-heavy, centre of mass almost over the front paws) and rounded paw pads as feet.
 
 Shared world: pass model/data/prefix to drive one creature inside a bigger MuJoCo world
 (sim/physics_world.py). Then call apply_action(), step the world, and after_physics() - step() does
@@ -118,7 +120,8 @@ WEIGHTS[8] = dict(WEIGHTS[6],
                   arm_ground=-1.0)      # per folded arm touching the ground (owner: no handstand on front legs + arms)
 MAX_TILT_V8 = 25.0           # deg: a trunk tilted further counts as a fall (the "handstand" had ~20 deg nose down)
 WEIGHTS[9] = dict(WEIGHTS[8])
-WEIGHTS[10] = dict(WEIGHTS[9])  # (the term values are still computed for analysis; v9 scores with V9_QUALITY)
+WEIGHTS[10] = dict(WEIGHTS[9])
+WEIGHTS[11] = dict(WEIGHTS[9])  # (the term values are still computed for analysis; v9 scores with V9_QUALITY)
 # version 9 quality factor: exp(-penalty_scale * sum(c * p)); p = normalised penalty, c = how much it shrinks the points
 V9_QUALITY = dict(
     energy=0.08,        # mechanical power / (m g v_walk) (knee mostly exempt)
@@ -146,7 +149,7 @@ V9_QUALITY = dict(
                         # Myrranox carried both front legs in the air and pushed like a wheelbarrow)
 CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
 ACTIVE = {7: {"myrranox": False, "dc": True}, 8: {"myrranox": False, "dc": True}, 9: {"myrranox": False, "dc": True},
-          10: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
+          10: {"myrranox": False, "dc": True}, 11: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
           5: {"myrranox": False, "dc": True}, 6: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
 # version 5 leg style per species: (sweep joint index, knee joint index, knee fold rad, max sweep rad)
 STYLE = {"myrranox": (0, 2, 0.8, 0.45), "dc": (1, 2, 0.6, 0.7)}
@@ -166,7 +169,7 @@ SLOW_DOWN = 1.0              # m/s^2
 def body_for(species, version, passive=False):
     """The body a walking brain of this version controls."""
     if version >= 6 and species == "dc":
-        body = BODIES[species](passive=True, active=True, arms=True, hulls=version >= 8)
+        body = BODIES[species](passive=True, active=True, arms=True, hulls=version >= 8, lean=version >= 11)
     elif version >= 9:
         body = BODIES[species](passive=True, hulls=True)
     elif ACTIVE.get(version, {}).get(species, False):
@@ -399,7 +402,7 @@ class LocomotionEnv(gym.Env):
             a = self.last_action + ACTION_FILTER * (a - self.last_action)
         if self.version == 7:                   # step generator + the brain's correction
             target = self.rest_joints + self.cpg_targets() + a * CPG_RESIDUAL
-        elif self.version >= 10:                # standing pose + tripod rhythm + the brain's correction
+        elif self.version == 10:                # standing pose + tripod rhythm + the brain's correction
             target = self.rest_joints + self.neutral + self.cpg_targets() + a * CPG_RESIDUAL_V10
         else:
             target = self.rest_joints + self.neutral + a * self.action_scales
