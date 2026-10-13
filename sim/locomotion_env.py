@@ -110,8 +110,9 @@ WEIGHTS[9] = dict(WEIGHTS[8])  # (the term values are still computed for analysi
 # version 9 quality factor: exp(-penalty_scale * sum(c * p)); p = normalised penalty, c = how much it shrinks the points
 V9_QUALITY = dict(
     energy=0.08,        # mechanical power / (m g v_walk) (knee mostly exempt)
-    jerk=2.0,           # mean (joint acceleration / 500 rad/s^2)^2
-    action_rate=10.0,   # mean (change of the brain's command)^2
+    jerk=1.0,           # mean (joint acceleration / 500 rad/s^2)^2
+    action_rate=1.0,    # mean (change of the smoothed joint targets)^2 - measured after the filter, so the brain's
+                        # exploration noise does not wipe out the points (13 Oct: quality 0.06 in training)
     slip=0.3,           # feet sliding while on the ground
     trunk_rock=0.3,     # trunk roll / pitch rate^2
     bounce=1.0,         # vertical trunk speed^2
@@ -119,7 +120,7 @@ V9_QUALITY = dict(
     surge=0.2,          # speeding up / slowing down within a stride
     landing=0.05,       # hard touchdowns (vertical foot speed^2)
     taps=0.3,           # touchdowns after less than half a swing (taps, double steps)
-    head_steady=0.05,   # DC: head rotation not explained by the turn
+    head_steady=0.02,   # DC: head rotation not explained by the turn
     head_level=2.0,     # DC: head tilt
     fidget=0.5,         # joint movement while commanded to stand
     joint_limit=0.5,    # joints near their limits
@@ -533,7 +534,7 @@ class LocomotionEnv(gym.Env):
             p = dict(
                 energy=float(np.sum(ew * np.abs(d.actuator_force[self.act_ids] * qvel))) / self.power_ref,
                 jerk=float(np.mean(ew * (qacc / 500.0) ** 2)),
-                action_rate=float(np.mean((self.raw - self.last_raw) ** 2)),
+                action_rate=float(np.mean((a - self.last_action) ** 2)),
                 slip=float(np.sum(np.minimum((foot_vel ** 2).sum(axis=1), 1.0) * foot_contact)),
                 trunk_rock=float(ang[0] ** 2 + ang[1] ** 2),
                 bounce=float(lin[2] ** 2),
