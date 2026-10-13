@@ -788,6 +788,9 @@ class LocomotionEnv(gym.Env):
             if leg.name.endswith("_R"):
                 src = self.leg_names.index(leg.name[:-1] + "L")
                 self.neutral[i * nj:(i + 1) * nj] = self.neutral[src * nj:(src + 1) * nj]
+        if self.version >= 12 and "neck_p0x" in self.body.joint_names:     # wolf head posture (bodies.WOLF_NECK_DEG)
+            from sim.bodies import WOLF_NECK_DEG
+            self.neutral[self.body.joint_names.index("neck_p0x")] = math.radians(WOLF_NECK_DEG)
         set_pose(np.zeros(self.nj))
         z_rest = foot_body()[self.is_leg, 2].min()
         set_pose(self.neutral)

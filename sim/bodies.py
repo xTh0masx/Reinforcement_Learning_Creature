@@ -429,6 +429,11 @@ DC_LEAN_SPRINGREF = {"spine_px": -2.72, "tail_p0x": 14.33, "tail_p1x": 10.61, "n
 # lean=True, detailed=True), 3 passes, 13 Oct 2026
 DC_DETAIL_SPRINGREF = {"spine_px": -2.95, "tail_p0x": 14.82, "tail_p1x": 11.17, "neck_p0x": -5.84, "neck_p1x": -6.14,
                        "arm_L_p0x": -9.19}
+# 14 Oct (night): the wolf carries its head low; with the head held up by the neck spring the brain pressed the neck
+# command against its limit (+1.06) and still only reached 9 deg (head 0.82 m, wolf target 0.75 m). The neck's rest
+# angle is lowered by WOLF_NECK_DEG (spring and neutral command), so the low head is the relaxed pose.
+WOLF_NECK_DEG = 16.0
+DC_DETAIL_SPRINGREF["neck_p0x"] += WOLF_NECK_DEG
 DC_HULL_SPRINGREF = {"spine_px": -1.42, "tail_p0x": 12.68, "tail_p1x": 10.72, "neck_p0x": -4.08, "neck_p1x": -6.32,
                      "arm_L_p0x": -9.19}
 
