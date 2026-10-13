@@ -140,6 +140,8 @@ V9_QUALITY = dict(
     arm_ground=1.0,     # DC: folded arm on the ground at walking speed
     body_contact=2.0,   # trunk on the ground
     track=1.0,          # DC: paws on the ground wider than the standing pose ((excess / 5 cm)^2)
+    extra_step=1.0,     # per touchdown less than 0.6 gait cycles after the same leg's last one (13 Oct: the DC's hind
+                        # legs stepped 2-4 times per cycle while the front legs stepped once)
     idle_leg=0.5)       # per leg that has not touched the ground for 2 step cycles while walking (13 Oct: the
                         # Myrranox carried both front legs in the air and pushed like a wheelbarrow)
 CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
@@ -301,6 +303,7 @@ class LocomotionEnv(gym.Env):
         self.prev_contact = np.ones(self.nlegs, dtype=bool)
         self.prev_vx = self.prev_vx_v9 = 0.0
         self.since_ground = np.zeros(self.nlegs)
+        self.since_touchdown = np.full(self.nlegs, 10.0)
         self.register_ema = 0.5
         if self.version >= 5:
             self.last_print = np.full((self.nlegs, 2), np.nan)
@@ -511,6 +514,7 @@ class LocomotionEnv(gym.Env):
                 terms["air_time"] = 0.0
             self.air_time = np.where(foot_contact, 0.0, self.air_time + CONTROL_DT)
             self.since_ground = np.where(foot_contact, 0.0, self.since_ground + CONTROL_DT)
+            self.since_touchdown = self.since_touchdown + CONTROL_DT
             self.prev_contact = foot_contact.copy()
             if "fidget" in w:
                 terms["fidget"] = w["fidget"] * min(float(np.mean(qvel ** 2)), 1.0) if standing else 0.0   # capped
@@ -574,7 +578,9 @@ class LocomotionEnv(gym.Env):
                 arm_ground=float(np.sum(foot_contact & idle_arms)),
                 body_contact=float(body_contact),
                 track=self._track_width(foot_pos, foot_contact),
-                idle_leg=float(np.sum(self.is_leg & (self.since_ground > 2.0 / f))) if not standing else 0.0)
+                idle_leg=float(np.sum(self.is_leg & (self.since_ground > 2.0 / f))) if not standing else 0.0,
+                extra_step=float(np.sum(touchdown & self.is_leg & (self.since_touchdown < 0.6 / f))) if not standing else 0.0)
+            self.since_touchdown = np.where(touchdown, 0.0, self.since_touchdown)
             self.prev_vx_v9 = float(lin[0])
             quality = math.exp(-self.penalty_scale * sum(V9_QUALITY[k] * v for k, v in p.items()))
             # tolerance grows with the commanded speed / turn: moving a little already earns something, standing
