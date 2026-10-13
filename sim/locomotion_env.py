@@ -242,6 +242,7 @@ class LocomotionEnv(gym.Env):
         self.is_leg = np.array([leg.mass_scale == 1.0 for leg in self.body.legs])     # False: the DC's arms
         self.nlegs = len(self.leg_names)
         self.front_legs = np.array([n.startswith("front") for n in self.leg_names])      # version 12 (DC)
+        self.arm_joint_mask = np.array([j.startswith("arm_") for j in self.body.joint_names])
         self.hind_legs = np.array([n.startswith("hind") for n in self.leg_names])
         self.paw_bodies = np.array([nid(mujoco.mjtObj.mjOBJ_BODY, f"{n}_s2") for n in self.leg_names])             if self.front_legs.any() else np.zeros(0, int)
         self.foot_geoms = np.array([nid(mujoco.mjtObj.mjOBJ_GEOM, n) for n in self.body.foot_names])
@@ -484,7 +485,13 @@ class LocomotionEnv(gym.Env):
         ang_err = (ang[2] - self.command[1]) ** 2
         torque = d.actuator_force[self.act_ids] / self.body.max_torque
         qj = d.qpos[self.joint_qpos]
-        near_limit = np.mean((qj < self.joint_lo + 0.087) | (qj > self.joint_hi - 0.087))
+        margin = 0.087                      # 5 deg; v12: at most 15 % of the range - the DC's +-8 deg leg spread
+        if self.version >= 12:              # counted as "near the limit" beyond +-3 deg, i.e. almost always
+            margin = np.minimum(0.087, 0.15 * (self.joint_hi - self.joint_lo))
+        at_limit = (qj < self.joint_lo + margin) | (qj > self.joint_hi - margin)
+        if self.version >= 12 and self.arm_joint_mask.any():     # folded arms rest against their stops (harmless)
+            at_limit = at_limit[~self.arm_joint_mask]
+        near_limit = np.mean(at_limit)
         terms = {
             "lin": w["lin"] * math.exp(-lin_err / sig_v ** 2),
             "ang": w["ang"] * math.exp(-ang_err / sig_w ** 2),
@@ -859,8 +866,10 @@ class LocomotionEnv(gym.Env):
             return 0.0
         R = self.data.xmat[self.torso_body].reshape(3, 3)
         y = np.abs(((foot_pos - self.data.xpos[self.torso_body]) @ R)[:, 1])
-        excess = np.maximum(y - self.foot_rest_y, 0.0)[legs]
-        return float(np.mean((excess / 0.05) ** 2))
+        excess = np.maximum(y - self.foot_rest_y, 0.0)
+        if self.version >= 12:              # also too narrow: paws crossing under the body (14 Oct, night: all
+            excess = excess + np.maximum(self.foot_rest_y - y - 0.04, 0.0)   # legs pulled in to the stop, shuffling)
+        return float(np.mean((excess[legs] / 0.05) ** 2))
 
     def _arm_tuck(self, foot_pos, duty):
         """Version 6: arms that are not part of the gait keep their claws folded near the chest."""
