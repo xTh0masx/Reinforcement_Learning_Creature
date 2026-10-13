@@ -121,8 +121,8 @@ V9_QUALITY = dict(
                         # exploration noise does not wipe out the points (13 Oct: quality 0.06 in training)
     slip=0.3,           # feet sliding while on the ground
     trunk_rock=0.3,     # trunk roll / pitch rate^2
-    bounce=1.0,         # vertical trunk speed^2
-    tilt=2.0,           # static trunk tilt (1 - cos)
+    bounce=3.0,         # vertical trunk speed^2 (x3 on 13 Oct: 4 cm bob cost only ~5 % of the points)
+    tilt=6.0,           # static trunk tilt (x3 on 13 Oct: 11 deg tilt cost only ~5 %)
     surge=0.2,          # speeding up / slowing down within a stride
     landing=0.05,       # hard touchdowns (vertical foot speed^2)
     taps=0.3,           # touchdowns after less than half a swing (taps, double steps)
@@ -132,7 +132,8 @@ V9_QUALITY = dict(
     joint_limit=0.5,    # joints near their limits
     belly=1.0,          # Myrranox: abdomen on the ground (an ant carries it)
     arm_ground=1.0,     # DC: folded arm on the ground at walking speed
-    body_contact=2.0)   # trunk on the ground
+    body_contact=2.0,   # trunk on the ground
+    track=1.0)          # DC: paws on the ground wider than the standing pose ((excess / 5 cm)^2)
 CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
 ACTIVE = {7: {"myrranox": False, "dc": True}, 8: {"myrranox": False, "dc": True}, 9: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
           5: {"myrranox": False, "dc": True}, 6: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
@@ -557,7 +558,8 @@ class LocomotionEnv(gym.Env):
                 joint_limit=float(near_limit),
                 belly=float(belly_contact),
                 arm_ground=float(np.sum(foot_contact & idle_arms)),
-                body_contact=float(body_contact))
+                body_contact=float(body_contact),
+                track=self._track_width(foot_pos, foot_contact))
             self.prev_vx_v9 = float(lin[0])
             quality = math.exp(-self.penalty_scale * sum(V9_QUALITY[k] * v for k, v in p.items()))
             # tolerance grows with the commanded speed / turn: moving a little already earns something, standing
@@ -571,7 +573,8 @@ class LocomotionEnv(gym.Env):
                 if idle_arms.any():
                     likeness.append(self._arm_tuck(foot_pos, duty))
             likeness = float(np.mean(likeness))
-            reward = tracking * (0.4 + 0.6 * likeness) * quality
+            # moving like the animal counts: a creature on speed but in the wrong rhythm keeps 20 % (was 40 %)
+            reward = tracking * (0.2 + 0.8 * likeness) * quality
             terms.update({"v9_tracking": tracking, "v9_likeness": likeness, "v9_quality": quality})
             terms.update({f"q_{k}": V9_QUALITY[k] * v for k, v in p.items()})
         self.last_action = a
@@ -733,7 +736,9 @@ class LocomotionEnv(gym.Env):
         set_pose(np.zeros(self.nj))
         z_rest = foot_body()[self.is_leg, 2].min()
         set_pose(self.neutral)
-        z_neutral = foot_body()[self.is_leg, 2].min()
+        feet_neutral = foot_body()
+        z_neutral = feet_neutral[self.is_leg, 2].min()
+        self.foot_rest_y = np.abs(feet_neutral[:, 1])            # paw track of the standing pose
         self.init_qpos[self.joint_qpos] = self.rest_joints + self.neutral
         self.init_qpos[self.q0 + 2] += z_rest - z_neutral            # feet stay on the floor
         if not self.shared:
@@ -784,6 +789,18 @@ class LocomotionEnv(gym.Env):
         if self.ankle_ref is not None:                                # version 6: paws flat, no flicking
             err = np.concatenate([err, q[self.ankle_idx] - self.ankle_ref])
         return math.exp(-float(np.mean(err ** 2)) / 0.35 ** 2)
+
+    def _track_width(self, foot_pos, foot_contact):
+        """Version 9, DC: paws on the ground further out than in the standing pose (a panther walks narrow)."""
+        if not self.arm_legs.any():
+            return 0.0
+        legs = self.is_leg & foot_contact
+        if not legs.any():
+            return 0.0
+        R = self.data.xmat[self.torso_body].reshape(3, 3)
+        y = np.abs(((foot_pos - self.data.xpos[self.torso_body]) @ R)[:, 1])
+        excess = np.maximum(y - self.foot_rest_y, 0.0)[legs]
+        return float(np.mean((excess / 0.05) ** 2))
 
     def _arm_tuck(self, foot_pos, duty):
         """Version 6: arms that are not part of the gait keep their claws folded near the chest."""
