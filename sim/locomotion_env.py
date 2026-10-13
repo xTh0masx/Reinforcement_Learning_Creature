@@ -736,7 +736,20 @@ class LocomotionEnv(gym.Env):
         z_neutral = foot_body()[self.is_leg, 2].min()
         self.init_qpos[self.joint_qpos] = self.rest_joints + self.neutral
         self.init_qpos[self.q0 + 2] += z_rest - z_neutral            # feet stay on the floor
-        self.stand_z = float(self.init_qpos[self.q0 + 2])
+        if not self.shared:
+            # Reference height for falls / the height observation: where the body really settles in the pose
+            # (under its weight the Myrranox sits ~4 cm below the computed pose; using the computed height made an
+            # upright creature count as fallen - 13 Oct)
+            d.qpos[:] = self.init_qpos
+            d.qvel[:] = 0.0
+            mujoco.mj_forward(m, d)
+            for _ in range(int(1.0 / m.opt.timestep)):
+                d.ctrl[self.act_ids] = self.init_qpos[self.joint_qpos]
+                mujoco.mj_step(m, d)
+            self.stand_z = float(d.qpos[self.q0 + 2])
+        else:
+            self.stand_z = float(self.init_qpos[self.q0 + 2])
+        mujoco.mj_resetData(m, d) if not self.shared else None
         d.qpos[:] = self.init_qpos
         mujoco.mj_forward(m, d)
 
