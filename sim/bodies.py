@@ -159,10 +159,13 @@ _MYR_LEFT = {
 PITCH, YAW = np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
 
 
-def myrranox(passive=False, active=False):
+def myrranox(passive=False, active=False, hulls=False):
     """passive=True: abdomen and head hang on spring-damper joints and swing with the gait (stage 1).
-    active=True (stage 2, walking v3): head and abdomen also get motors the brain controls; springs stay."""
-    passive = passive or active
+    active=True (stage 2, walking v3): head and abdomen also get motors the brain controls; springs stay.
+    hulls=True (walking v9): every part is a convex hull cut from the real Myrranox mesh (sim/hulls.py) instead of
+    capsules; the claws are the feet; the 8 kg are distributed by hull volume."""
+    passive = passive or active or hulls
+    SR = MYR_HULL_SPRINGREF if hulls else MYR_SPRINGREF      # spring rest angles for the part masses in use
     legs = []
     for pair, pts in _MYR_LEFT.items():
         for side, sgn in (("L", 1), ("R", -1)):
@@ -178,11 +181,11 @@ def myrranox(passive=False, active=False):
         chains = [
             # petiole joint measured between Abdomen_low and the torso; the abdomen bobs and sways behind the body
             PassiveChain("abdomen", [(0.068, 0, 0.174), (-0.66, 0, 0.17)],
-                         [[(PITCH, 16.0, MYR_SPRINGREF["abdomen_p0x"]), (YAW, 8.0, 0.0)]],
+                         [[(PITCH, 16.0, SR["abdomen_p0x"]), (YAW, 8.0, 0.0)]],
                          masses=[1.2], radius=[0.09], bones=["abdomen"], damping_ratio=0.2),
             # head + mandibles on the neck joint between Head_low and the torso
             PassiveChain("head", [(0.507, 0, 0.165), (0.75, 0, 0.13)],
-                         [[(PITCH, 12.0, MYR_SPRINGREF["head_p0x"]), (YAW, 6.0, 0.0)]],
+                         [[(PITCH, 12.0, SR["head_p0x"]), (YAW, 6.0, 0.0)]],
                          masses=[1.0], radius=[0.05], bones=["head"], damping_ratio=0.25),
         ]
         if active:
@@ -194,7 +197,12 @@ def myrranox(passive=False, active=False):
             '<geom name="mandibles" type="box" pos="0.70 0 0.095" size="0.05 0.08 0.02" mass="0.2"/>',
             '<geom name="abdomen" type="ellipsoid" pos="-0.27 0 0.18" size="0.40 0.16 0.11" mass="1.2"/>',
         ]
-    return BodySpec("myrranox", mass=8.0, torso_geoms=torso, legs=legs,
+    hull_data = None
+    if hulls:
+        from sim.hulls import load
+        hull_data = load("myrranox")
+        torso = []                                   # thorax, head and abdomen shapes come from the hulls
+    return BodySpec("myrranox", mass=8.0, torso_geoms=torso, legs=legs, hulls=hull_data,
                     kp=60.0, max_torque=20.0, joint_damping=0.5, action_scale=0.6, stand_height=0.0, passive=chains,
                     head_body="head_s0" if active else "")
 
@@ -222,7 +230,7 @@ def dc(passive=False, active=False, arms=False, hulls=False):
     and spine, neck and head get motors the brain controls; tail and arms stay passive.
     arms=True (walking v6): the extra arms become actuated limbs (shoulder 2, elbow, wrist, claws touch the ground),
     legs sway sideways only +-8 deg (paws under the body like a panther), segment radii fitted to the mesh.
-    hulls=True (walking v8): every part is a convex hull cut from the real DC mesh (sim/dc_hulls.py) instead of
+    hulls=True (walking v8): every part is a convex hull cut from the real DC mesh (sim/hulls.py) instead of
     capsules; the paws (with claws) are the feet; the 60 kg are distributed by hull volume."""
     passive = passive or active or arms
     SR = DC_HULL_SPRINGREF if hulls else DC_SPRINGREF      # spring rest angles for the part masses in use
@@ -279,8 +287,8 @@ def dc(passive=False, active=False, arms=False, hulls=False):
         ]
     hull_data = None
     if hulls:
-        from sim.dc_hulls import load
-        hull_data = load()
+        from sim.hulls import load
+        hull_data = load("dc")
         torso = []                                   # the torso / rear / neck / tail shapes come from the hulls
     return BodySpec("dc", mass=60.0, torso_geoms=torso, legs=legs, hulls=hull_data,
                     kp=300.0, max_torque=150.0, joint_damping=3.0, action_scale=0.6, stand_height=0.0, passive=chains,
@@ -339,10 +347,12 @@ def _foot_site(spec, leg):
 # Spring rest angles (deg) that cancel the sag under gravity, so the parts rest in the modelled pose.
 # Found with calibrate_springref() (python -m sim.bodies --springref).
 MYR_SPRINGREF = {"abdomen_p0x": 15.34, "head_p0x": -5.68}
+# mesh bodies (walking v8/v9): calibrate_springref(..., hulls=True) residuals added on 13 Oct 2026
+MYR_HULL_SPRINGREF = {"abdomen_p0x": 4.50, "head_p0x": -3.86}   # abdomen carried ~5 deg above the model pose (it would otherwise rest on the ground)
 DC_SPRINGREF = {"spine_px": -1.89, "tail_p0x": 16.85, "tail_p1x": 12.91, "neck_p0x": -5.5, "neck_p1x": -5.85, "arm_L_p0x": -9.19}
 # walking v8 mesh body (heavier neck, rear body with its real volume): calibrate_springref("dc", active=True,
 # arms=True, hulls=True) residuals added to DC_SPRINGREF on 30 Sep 2026
-DC_HULL_SPRINGREF = {"spine_px": -1.44, "tail_p0x": 14.91, "tail_p1x": 8.15, "neck_p0x": -5.59, "neck_p1x": -2.86,
+DC_HULL_SPRINGREF = {"spine_px": -1.42, "tail_p0x": 12.68, "tail_p1x": 10.72, "neck_p0x": -4.08, "neck_p1x": -6.32,
                      "arm_L_p0x": -9.19}
 
 BODIES = {"myrranox": myrranox, "dc": dc}
@@ -367,8 +377,10 @@ def _passive_xml(ch, offset=(0.0, 0.0, 0.0), spec=None):
         length = float(np.linalg.norm(vec))
         mass_out = sum(masses[i:])                          # this joint carries all segments beyond it
         inertia = mass_out * (0.5 * length) ** 2 + masses[i] * length ** 2 / 12
+        scale = mass_out / sum(ch.masses[i:])               # mesh bodies: springs scaled to the real mass
         joints = ""
         for k, (axis, stiff, ref) in enumerate(seg):
+            stiff = stiff * scale
             damp = 2 * ch.damping_ratio * np.sqrt(stiff * inertia)
             joints += (f'<joint name="{ch.name}_p{i}{"xyz"[k]}" axis="{_fmt(axis)}" stiffness="{stiff}" '
                        f'springref="{ref}" damping="{damp:.4f}" armature="0.005" limited="true" '
