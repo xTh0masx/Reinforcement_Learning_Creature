@@ -119,7 +119,7 @@ V9_QUALITY = dict(
     jerk=1.0,           # mean (joint acceleration / 500 rad/s^2)^2
     action_rate=1.0,    # mean (change of the smoothed joint targets)^2 - measured after the filter, so the brain's
                         # exploration noise does not wipe out the points (13 Oct: quality 0.06 in training)
-    slip=0.3,           # feet sliding while on the ground
+    slip=1.0,           # feet sliding while on the ground (x3 on 13 Oct: the Myrranox scrubbed its middle legs)
     trunk_rock=0.3,     # trunk roll / pitch rate^2
     bounce=3.0,         # vertical trunk speed^2 (x3 on 13 Oct: 4 cm bob cost only ~5 % of the points)
     tilt=6.0,           # static trunk tilt (x3 on 13 Oct: 11 deg tilt cost only ~5 %)
@@ -133,7 +133,9 @@ V9_QUALITY = dict(
     belly=1.0,          # Myrranox: abdomen on the ground (an ant carries it)
     arm_ground=1.0,     # DC: folded arm on the ground at walking speed
     body_contact=2.0,   # trunk on the ground
-    track=1.0)          # DC: paws on the ground wider than the standing pose ((excess / 5 cm)^2)
+    track=1.0,          # DC: paws on the ground wider than the standing pose ((excess / 5 cm)^2)
+    idle_leg=0.5)       # per leg that has not touched the ground for 2 step cycles while walking (13 Oct: the
+                        # Myrranox carried both front legs in the air and pushed like a wheelbarrow)
 CPG_RESIDUAL = 0.35          # version 7: rad per action unit for the brain's correction on top of the step generator
 ACTIVE = {7: {"myrranox": False, "dc": True}, 8: {"myrranox": False, "dc": True}, 9: {"myrranox": False, "dc": True}, 3: {"myrranox": True, "dc": True}, 4: {"myrranox": False, "dc": True},
           5: {"myrranox": False, "dc": True}, 6: {"myrranox": False, "dc": True}}   # actuated spine/neck/head/abdomen
@@ -291,6 +293,7 @@ class LocomotionEnv(gym.Env):
         self.air_time = np.zeros(self.nlegs)
         self.prev_contact = np.ones(self.nlegs, dtype=bool)
         self.prev_vx = self.prev_vx_v9 = 0.0
+        self.since_ground = np.zeros(self.nlegs)
         self.register_ema = 0.5
         if self.version >= 5:
             self.last_print = np.full((self.nlegs, 2), np.nan)
@@ -498,6 +501,7 @@ class LocomotionEnv(gym.Env):
             else:
                 terms["air_time"] = 0.0
             self.air_time = np.where(foot_contact, 0.0, self.air_time + CONTROL_DT)
+            self.since_ground = np.where(foot_contact, 0.0, self.since_ground + CONTROL_DT)
             self.prev_contact = foot_contact.copy()
             if "fidget" in w:
                 terms["fidget"] = w["fidget"] * min(float(np.mean(qvel ** 2)), 1.0) if standing else 0.0   # capped
@@ -560,7 +564,8 @@ class LocomotionEnv(gym.Env):
                 belly=float(belly_contact),
                 arm_ground=float(np.sum(foot_contact & idle_arms)),
                 body_contact=float(body_contact),
-                track=self._track_width(foot_pos, foot_contact))
+                track=self._track_width(foot_pos, foot_contact),
+                idle_leg=float(np.sum(self.is_leg & (self.since_ground > 2.0 / f))) if not standing else 0.0)
             self.prev_vx_v9 = float(lin[0])
             quality = math.exp(-self.penalty_scale * sum(V9_QUALITY[k] * v for k, v in p.items()))
             # tolerance grows with the commanded speed / turn: moving a little already earns something, standing
