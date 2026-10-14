@@ -115,6 +115,8 @@ ARM_TREX_ELBOW = (0.82, 0.25, 0.50)
 ARM_IDLE_SCALE = 0.3         # rad per action unit for the arm joints while the arms are not part of the gait (walk);
                              # full ARM range (1.8) only in the sprint - the brain had learned to keep the wrists bent
                              # 70-90 deg ("hands permanently tucked in"); now they stay within +-17 deg of the T-rex pose
+SPRINT_CROUCH = 0.09         # m: how much lower the chest is carried when the arms run along (v12 sprint pose) - at
+                             # the normal height the short arms miss the ground by 6 cm even fully stretched
 ARM_TREX_TOL = 0.20          # m: arms may swing this far around the pose (balancing) and still score well
 ANKLE_FOLD = 0.3                # version 6: ankle / wrist fold in mid-swing (rad); flat (no rhythm) in stance
 # version 9: natural standing pose = the neutral position the brain's commands work around (13 Oct: on the mesh bodies
@@ -294,6 +296,9 @@ class LocomotionEnv(gym.Env):
             self._init_style()
         if version >= 9:
             self._init_neutral()
+        self.neutral_sprint = self.neutral.copy()
+        if version >= 12 and self.front_legs.any():
+            self._init_sprint_pose()
 
         obs_size = 3 + 3 + 3 + 1 + 3 * self.nj + 2 + (2 * self.nlegs + 1 if version >= 2 else 0)
         self.observation_space = spaces.Box(-np.inf, np.inf, shape=(obs_size,), dtype=np.float32)
@@ -451,7 +456,10 @@ class LocomotionEnv(gym.Env):
                 engage = float(np.max(duty[self.arm_legs])) / gaits.ARM_DUTY
                 scales = scales.copy()
                 scales[self.arm_joint_mask] = ARM_IDLE_SCALE + engage * (scales[self.arm_joint_mask] - ARM_IDLE_SCALE)
-            target = self.rest_joints + self.neutral + a * scales
+            neutral = self.neutral
+            if self.version >= 12 and self.arm_joint_mask.any() and engage > 0:   # sprint pose: chest lower,
+                neutral = self.neutral + engage * (self.neutral_sprint - self.neutral)   # palms down
+            target = self.rest_joints + neutral + a * scales
         self.data.ctrl[self.act_ids] = np.clip(target, self.joint_lo, self.joint_hi)
         return a
 
@@ -925,6 +933,72 @@ class LocomotionEnv(gym.Env):
             dist = 0.5 * (dist + np.linalg.norm(elbow - self.elbow_target[idle], axis=1))
             return float(np.mean(np.exp(-(dist / ARM_TREX_TOL) ** 2)))
         return float(np.mean(np.exp(-(dist / 0.25) ** 2)))
+
+    def _init_sprint_pose(self):
+        """Version 12 (owner, 14 Oct: "the hands should open so the palm can touch the ground"): neutral pose for the
+        sprint, when the arms run along. The front legs fold so the chest is SPRINT_CROUCH lower; each arm reaches the
+        floor (the plane through the hind and the lowered front paws) with its palm parallel to it."""
+        m, d = self.model, self.data
+        nj = len(self.body.legs[0].joints)
+        q_save = d.qpos.copy()
+        R = d.xmat[self.torso_body].reshape(3, 3)
+
+        def body(p):
+            return (p - d.xpos[self.torso_body]) @ R
+
+        def set_pose(offset):
+            d.qpos[self.joint_qpos] = self.rest_joints + offset
+            mujoco.mj_kinematics(m, d)
+
+        def search(idx, cost, q):
+            best = cost(q)
+            for step in (0.2, 0.1, 0.05, 0.02, 0.01):
+                improved = True
+                while improved:
+                    improved = False
+                    for k in range(len(idx)):
+                        for sgn in (1, -1):
+                            trial = q.copy()
+                            trial[k] = np.clip(trial[k] + sgn * step, self.joint_lo[idx[k]] - self.rest_joints[idx[k]],
+                                               self.joint_hi[idx[k]] - self.rest_joints[idx[k]])
+                            c = cost(trial)
+                            if c < best - 1e-5:
+                                best, q, improved = c, trial, True
+            return q, best
+
+        pose = self.neutral.copy()
+        set_pose(pose)
+        feet = body(d.site_xpos[self.foot_sites])
+        for i in np.flatnonzero(self.front_legs):                     # front paws higher = chest lower
+            idx = [i * nj + 1, i * nj + 2]
+            goal = feet[i] + [0.0, 0.0, SPRINT_CROUCH]
+
+            def cost(qq, i=i, idx=idx, goal=goal):
+                off = pose.copy(); off[idx] = qq; set_pose(off)
+                return float(np.linalg.norm(body(d.site_xpos[self.foot_sites[i]]) - goal))
+            pose[idx], _ = search(idx, cost, pose[idx].copy())
+        set_pose(pose)
+        feet = body(d.site_xpos[self.foot_sites])
+        hind, front = feet[self.hind_legs].mean(0), feet[self.front_legs].mean(0)
+        slope = (front[2] - hind[2]) / (front[0] - hind[0])           # floor line in the body frame (x, z)
+        floor_dir = np.array([1.0, 0.0, slope]) / math.hypot(1.0, slope)
+        self.sprint_arm_error = []
+        for i in np.flatnonzero(self.arm_legs):
+            idx = [i * nj + k for k in range(1, nj)]
+            x_reach = 0.95
+            goal = np.array([x_reach, feet[i, 1], hind[2] + slope * (x_reach - hind[0])])
+
+            def cost(qq, i=i, idx=idx, goal=goal):
+                off = pose.copy(); off[idx] = qq; set_pose(off)
+                tip = body(d.site_xpos[self.foot_sites[i]])
+                sole = R.T @ (d.xmat[self.paw_bodies[i]].reshape(3, 3) @ self.pad_axes[i])
+                sole /= np.linalg.norm(sole) + 1e-9
+                return float(np.linalg.norm(tip[[0, 2]] - goal[[0, 2]])) + 1.0 * (1.0 - abs(sole @ floor_dir))
+            pose[idx], err = search(idx, cost, pose[idx].copy())
+            self.sprint_arm_error.append(err)
+        self.neutral_sprint = pose
+        d.qpos[:] = q_save
+        mujoco.mj_kinematics(m, d)
 
     def _paw_tilt_cost(self, touchdown):
         """Version 12: sum over the paws touching down of ((sole tilt - PAW_FLAT_DEG) / 20 deg)^2; the sole is the
