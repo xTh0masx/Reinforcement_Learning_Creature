@@ -54,6 +54,19 @@ R_FIGHT_RISK = -0.1         # per step closer than 2 m to a rival
 CONFRONT_RANGE = 8.0
 FIGHT_RANGE = 2.0
 
+# Game mode (owner, 14 Oct: "prey give +1 point; after 3 min both creatures have to reach the middle within 30 s, if
+# not they die; else the one with the most points wins"): one round = 3 min hunt + 30 s to the water hole. Hunger,
+# fatigue and the territories stay; resting spots give no reward; every eaten prey comes back after GAME_RESPAWN s.
+GAME_HUNT_STEPS = 1800      # 3 min
+GAME_GATHER_STEPS = 300     # 30 s to reach the water hole
+R_POINT = 1.0               # per prey eaten during the hunt
+R_WIN = 10.0                # survived with the most points (or the only survivor)
+R_DRAW = 3.0                # survived with as many points as the best surviving rival
+R_DIE = -10.0               # not in the water hole at the end (or starved)
+GATHER_SHAPING = 5.0        # potential-based guide to the water hole during the 30 s
+GAME_RESPAWN = (30.0, 60.0) # s
+OBS_SIZE_V3 = 36            # v2 + hunt time left, gather phase, water hole (dir x, dir y, dist), own / best rival points
+
 OBS_SIZE = 27               # observation version 1 (stage 1 layout)
 RAYS = slice(19, 27)        # position of the 8 obstacle rays in every observation version
 OBS_SIZE_V2 = 29            # + prey left in the own territory (fraction) + a rival is inside the own territory (1/0)
@@ -117,7 +130,9 @@ class Creature:
         self.confronted = set()          # ids of rivals this creature confronted inside its territory
         self.stats = {"reward": 0.0, "prey_caught": 0, "hits": 0, "steps_in_home": 0, "steps_starving": 0,
                       "rest_steps": 0, "home_prey_eaten": 0, "raid_prey_eaten": 0, "neutral_prey_eaten": 0,
-                      "steps_in_rival_zone": 0, "intruders_repelled": 0}
+                      "steps_in_rival_zone": 0, "intruders_repelled": 0, "points": 0, "survived": 0, "won": 0,
+                      "drew": 0}
+        self.points = 0
         if self.policy is not None and hasattr(self.policy, "reset"):
             self.policy.reset()
 
@@ -146,8 +161,10 @@ class CreatureEnv(gym.Env):
         self.low_stock_prob = low_stock_prob
         self.action_mapping = action_mapping
         self.tired_from = tired_from
-        self.observation_space = spaces.Box(-1.0, 1.0, shape=(OBS_SIZE_V2 if obs_version >= 2 else OBS_SIZE,),
-                                            dtype=np.float32)
+        self.game = reward_version >= 3             # 3 min hunt + 30 s to the water hole (GAME_* constants)
+        self.episode_steps = GAME_HUNT_STEPS + GAME_GATHER_STEPS if self.game else EPISODE_STEPS
+        size = OBS_SIZE_V3 if obs_version >= 3 else OBS_SIZE_V2 if obs_version >= 2 else OBS_SIZE
+        self.observation_space = spaces.Box(-1.0, 1.0, shape=(size,), dtype=np.float32)
         self.action_space = spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
         self._ray_offsets = np.arange(N_RAYS) * (2 * math.pi / N_RAYS)
         self._viewer = None
@@ -188,7 +205,8 @@ class CreatureEnv(gym.Env):
                 from sim.nav_brain import NavBrain
                 c.policy = NavBrain(cfg["brain"])
                 # a brain trained on the 27-value layout gets that layout (3 stacked frames)
-                c.obs_version = 1 if c.policy.model.observation_space.shape[0] == 3 * OBS_SIZE else 2
+                n = c.policy.model.observation_space.shape[0] // 3
+                c.obs_version = 1 if n == OBS_SIZE else 3 if n == OBS_SIZE_V3 else 2
             else:
                 from sim.scripted import ScriptedPredator
                 c.policy = ScriptedPredator(intrude_prob=cfg.get("intrude_prob", 0.0))
@@ -252,7 +270,8 @@ class CreatureEnv(gym.Env):
         acts = dict(actions or self.other_actions())
         acts[self.ego.id] = action
         before = {c.id: (c.hunger, c.fatigue) for c in self.creatures}
-        phi_before = {c.id: self._potential(c) for c in self.creatures} if self.reward_version >= 2 else {}
+        gather = self.game and self.t + 1 > GAME_HUNT_STEPS      # phase of this step (same for both potentials)
+        phi_before = {c.id: self._potential(c, gather) for c in self.creatures} if self.reward_version >= 2 else {}
         rewards = {c.id: {} for c in self.creatures}
 
         # --- movement ---
@@ -273,15 +292,20 @@ class CreatureEnv(gym.Env):
             self._needs(c, caught.get(c.id, False))
             self._rewards(c, rewards[c.id], before[c.id][1])
             if self.reward_version >= 2:
-                rewards[c.id]["fed"] = R_FED * (1.0 - c.hunger)
-                rewards[c.id]["hunt_guide"] = SHAPING_GAMMA * self._potential(c) - phi_before[c.id]
+                if not self.game:
+                    rewards[c.id]["fed"] = R_FED * (1.0 - c.hunger)
+                key = "water_guide" if gather else "hunt_guide"
+                rewards[c.id][key] = SHAPING_GAMMA * self._potential(c, gather) - phi_before[c.id]
 
         self.t += 1
         ego, r = self.ego, rewards[self.ego.id]
         terminated = ego.starve_steps >= STARVE_LIMIT_STEPS
         if terminated:
-            r["starved"] = R_STARVED
-        truncated = self.t >= EPISODE_STEPS
+            r["starved"] = R_DIE if self.game else R_STARVED
+        truncated = self.t >= self.episode_steps
+        if self.game and truncated and not terminated:
+            r.update(self._game_outcome())
+            terminated, truncated = True, False                 # the round is over (no value beyond it)
         for c in self.creatures:
             c.trail.append(c.pos.copy())
             c.stats["reward"] += float(sum(rewards[c.id].values()))
@@ -294,14 +318,37 @@ class CreatureEnv(gym.Env):
         return self._observe(ego), reward, terminated, truncated, info
 
     # ------------------------------------------------------------------------------------------
-    def _potential(self, c):
-        """Shaping potential: the hungrier, the more it pays to be close to the nearest visible prey."""
+    def _potential(self, c, gather=False):
+        """Shaping potential: the hungrier, the more it pays to be close to the nearest visible prey.
+        Game mode: every prey is a point (no hunger factor); in the last 30 s the water hole instead."""
+        if self.game and gather:
+            return -GATHER_SHAPING * float(np.hypot(*(c.pos - self.habitat.water.center))) / DIST_SCALE
         d = PREY_SENSE_RANGE
         if self.prey_alive.any():
             dist = np.linalg.norm(self.prey_pos - c.pos, axis=1)
             dist[~self.prey_alive] = np.inf
             d = min(float(dist.min()), PREY_SENSE_RANGE)
-        return -SHAPING * c.hunger * d / PREY_SENSE_RANGE
+        return -SHAPING * (1.0 if self.game else c.hunger) * d / PREY_SENSE_RANGE
+
+    def _game_outcome(self):
+        """End of the round: creatures outside the water hole die; of the survivors the most points win."""
+        water = self.habitat.water
+        alive = {c.id: water.contains(c.pos) for c in self.creatures}
+        for c in self.creatures:
+            c.stats["points"] = c.points
+            c.stats["survived"] = int(alive[c.id])
+        ego = self.ego
+        if not alive[ego.id]:
+            return {"died": R_DIE}
+        rivals = [c.points for c in self.creatures if c is not ego and alive[c.id]]
+        best = max(rivals) if rivals else -1
+        if ego.points > best:
+            ego.stats["won"] = 1
+            return {"won": R_WIN}
+        if ego.points == best:
+            ego.stats["drew"] = 1
+            return {"draw": R_DRAW}
+        return {"lost": 0.0}
 
     def _power_estimate(self, c):
         cal = self.energy.get(c.species.name)
@@ -397,7 +444,7 @@ class CreatureEnv(gym.Env):
         c._on_rest, c._moving = on_rest, moving
 
     def _rewards(self, c, r, fatigue_before):
-        if c._on_rest and not c._moving and fatigue_before > 0.5:
+        if c._on_rest and not c._moving and fatigue_before > 0.5 and not self.game:
             r["rest"] = R_REST
             c.stats["rest_steps"] += 1
 
@@ -417,7 +464,7 @@ class CreatureEnv(gym.Env):
                 continue
             v = o.pos - c.pos
             dist = float(np.hypot(*v))
-            if dist < FIGHT_RANGE:
+            if dist < FIGHT_RANGE and not (self.game and self.t >= GAME_HUNT_STEPS):   # both share the water hole
                 r["fight_risk"] = r.get("fight_risk", 0.0) + R_FIGHT_RISK
             if c.home.contains(o.pos):
                 toward = math.cos(math.atan2(v[1], v[0]) - c.heading) > 0.7 and c.speed > MOVING_SPEED
@@ -542,13 +589,13 @@ class CreatureEnv(gym.Env):
             if d[i] > c.species.catch_radius:
                 continue
             area = self.prey_area[i]
-            if area == c.zone:                                  # own territory: gone for good
+            if area == c.zone:                                  # own territory: gone for good (game: comes back)
                 self.prey_alive[i] = False
-                self.prey_respawn[i] = np.inf
+                self.prey_respawn[i] = rng.uniform(*GAME_RESPAWN) if self.game else np.inf
                 c.stats["home_prey_eaten"] += 1
             elif area == NEUTRAL:                               # neutral: respawns later
                 self.prey_alive[i] = False
-                self.prey_respawn[i] = rng.uniform(*cfg["respawn_seconds"])
+                self.prey_respawn[i] = rng.uniform(*(GAME_RESPAWN if self.game else cfg["respawn_seconds"]))
                 c.stats["neutral_prey_eaten"] += 1
             else:                                               # raid: a new prey appears at the eater's home
                 self.prey_area[i] = c.zone
@@ -558,7 +605,11 @@ class CreatureEnv(gym.Env):
             c.hunger = max(0.0, c.hunger - c.species.hunger_per_prey)
             c.stats["prey_caught"] += 1
             caught[c.id] = True
-            if self.reward_version >= 2 or before[c.id][0] > 0.5:
+            if self.game:
+                if self.t < GAME_HUNT_STEPS:                    # points only during the 3 min hunt
+                    c.points += 1
+                    rewards[c.id]["point"] = R_POINT
+            elif self.reward_version >= 2 or before[c.id][0] > 0.5:
                 rewards[c.id]["catch"] = R_CATCH * before[c.id][0]
         return caught
 
@@ -616,6 +667,12 @@ class CreatureEnv(gym.Env):
             stock = self.prey_stock()[c.zone] / max(int(self.habitat.prey["per_territory"]), 1)
             intruder = any(o.species.name != sp.name and c.home.contains(o.pos) for o in self.creatures if o is not c)
             obs += [min(stock, 1.0), 1.0 if intruder else 0.0]
+        if getattr(c, "obs_version", 2) >= 3:
+            left = max(GAME_HUNT_STEPS - self.t, 0) / GAME_HUNT_STEPS
+            rival_pts = max([o.points for o in self.creatures if o is not c] or [0])
+            obs += [left, 1.0 if self.t >= GAME_HUNT_STEPS else 0.0]
+            obs += self._ego_vec(c, self.habitat.water.center, DIST_SCALE)
+            obs += [min(c.points / 10.0, 1.0), min(rival_pts / 10.0, 1.0)]
         return np.clip(np.asarray(obs, dtype=np.float32), -1.0, 1.0)
 
     def observe(self, cid):
@@ -628,4 +685,5 @@ class CreatureEnv(gym.Env):
             "heading": float(c.heading), "speed": c.speed, "turn_rate": c.turn_rate,
             "activity": c.activity, "hunger": c.hunger, "fatigue": c.fatigue, "alertness": c.alertness,
             "reward_terms": dict(rewards), "hit": "hit" in rewards, "prey_stock": self.prey_stock(),
+            "points": getattr(c, "points", 0), "in_water": bool(self.habitat.water.contains(c.pos)),
         }
