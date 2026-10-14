@@ -175,6 +175,9 @@ V12_QUALITY = dict(V9_QUALITY,
     paw_flat=0.5,       # per touchdown with the paw sole tilted more than PAW_FLAT_DEG (owner: "the paws need to land
                         # normally when sprinting" - not on the claw tips or the side of the paw; arms too)
     high_step=0.5)      # swing paw higher than WOLF_LIFT ((excess / 5 cm)^2)
+WALK_SHARE = 0.5             # version 12: half of the moving commands stay walks (<= WOLF_WALK_MAX) whatever the sprint
+                             # limit - with mostly sprint commands the DC forgot to walk and stood crouched (14 Oct)
+SPRINT_PENALTY_FROM, SPRINT_PENALTY_FULL = 1.2, 2.5   # m/s: the quality costs blend to self.sprint_penalty between these
 BRAKE_DRILL = 0.5            # version 12: after a command above 1.5 m/s, half the next commands are a walk (braking)
 # version 12 hands on the ground (owner, 14 Oct: "it runs on the toes" -> all of: soft wrist, palm reflex, palm rule,
 # arm brain): while a hand touches the ground its wrist motor goes soft (WRIST_SOFT_KP instead of the body's kp, the
@@ -238,6 +241,7 @@ class LocomotionEnv(gym.Env):
         self.ramp_all = version >= 8        # every command change ramps (speed up / slow down gradually)
         self.command_limit = None           # training stage: highest commanded speed (set_command_limit)
         self.walk_help = 0.0                # training start-up help: bonus for forward progress (set_walk_help)
+        self.sprint_penalty = 1.0           # version 12: weight of the quality costs at sprint speed (set_sprint_penalty)
         self.w = dict(WEIGHTS[version])
         if version >= 5:
             self.w.update(STEADY_TRUNK_V5.get(species, {}))
@@ -416,6 +420,8 @@ class LocomotionEnv(gym.Env):
         else:
             top = min(self.top_speed, self.command_limit or self.top_speed)
             v = rng.uniform(-sp.max_backward_speed, sp.max_speed) if self.version == 1 else rng.uniform(0.1, top)
+            if self.version >= 12 and top > WOLF_WALK_MAX and rng.uniform() < WALK_SHARE:
+                v = rng.uniform(0.1, WOLF_WALK_MAX)            # keep practising the walk
             if self.version >= 12 and self.command_target[0] > 1.5 and rng.uniform() < BRAKE_DRILL:
                 v = rng.uniform(0.0, 0.8)                      # braking drill: from a run straight back to a walk
             w = rng.uniform(-sp.max_turn_rate, sp.max_turn_rate) * (rng.uniform() < (0.7 if self.version == 1 else 0.8))
@@ -676,7 +682,11 @@ class LocomotionEnv(gym.Env):
             self.since_touchdown = np.where(touchdown, 0.0, self.since_touchdown)
             self.prev_vx_v9 = float(lin[0])
             qw = V12_QUALITY if self.version >= 12 else V9_QUALITY
-            quality = math.exp(-self.penalty_scale * sum(qw[k] * v for k, v in p.items()))
+            scale = self.penalty_scale
+            if self.version >= 12:              # sprint still being learned: its costs count less (ramped up in training)
+                s_ = float(np.clip((abs(self.command[0]) - SPRINT_PENALTY_FROM) / (SPRINT_PENALTY_FULL - SPRINT_PENALTY_FROM), 0, 1))
+                scale *= 1.0 - s_ + s_ * self.sprint_penalty
+            quality = math.exp(-scale * sum(qw[k] * v for k, v in p.items()))
             # tolerance grows with the commanded speed / turn: moving a little already earns something, standing
             # still while walking is commanded earns almost nothing (a fixed wide tolerance let it pay, 13 Oct test)
             tol_v = (0.5 * abs(self.command[0]) + 0.1) * max(self.track_scale, 0.5)
@@ -1129,6 +1139,10 @@ class LocomotionEnv(gym.Env):
 
     def set_penalty_scale(self, scale):
         self.penalty_scale = float(scale)
+
+    def set_sprint_penalty(self, scale):
+        """Version 12 training: how much the quality costs count at sprint speed (0..1, ramped up)."""
+        self.sprint_penalty = float(scale)
 
     def set_walk_help(self, scale):
         """Training start-up help: weight of the forward-progress bonus (1 at the start, faded to 0)."""

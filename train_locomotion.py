@@ -77,6 +77,26 @@ class CommandRamp(BaseCallback):
         return True
 
 
+class SprintPenaltyRamp(BaseCallback):
+    """Version 12: the sprint's quality costs count `start` at first and full (1.0) after 80 % of the run - while the
+    DC cannot sprint yet, full costs left it nothing to gain and it unlearned walking (14 Oct)."""
+
+    def __init__(self, steps, start):
+        super().__init__()
+        self.steps, self.start, self.t0 = steps, start, None
+
+    def _on_rollout_start(self):
+        if self.t0 is None:
+            self.t0 = self.num_timesteps
+        frac = min(1.0, (self.num_timesteps - self.t0) / (0.8 * self.steps))
+        scale = self.start + frac * (1.0 - self.start)
+        self.training_env.env_method("set_sprint_penalty", scale)
+        self.logger.record("train/sprint_penalty", scale)
+
+    def _on_step(self):
+        return True
+
+
 class StuckJoints(BaseCallback):
     """Warn when a joint's mean command drifts beyond the action limit (clipped -> no learning signal; this froze the
     Myrranox knees in v2-v4). Logs the number of stuck joints and prints their names."""
@@ -142,6 +162,8 @@ def main():
                    help="training stage: commanded speeds up to this (walk first, then trot, run, sprint)")
     p.add_argument("--max-command-end", type=float, default=None,
                    help="sprint stage: raise the command limit from --max-command to this over the run")
+    p.add_argument("--sprint-penalty", type=float, default=None,
+                   help="version 12: start weight of the sprint's quality costs, ramped to 1 over the run")
     p.add_argument("--speed-sigma", type=float, default=None,
                    help="fixed speed tracking tolerance in m/s (default 0.5 x max speed x track scale)")
     p.add_argument("--penalty-fixed", type=float, default=None,
@@ -198,6 +220,8 @@ def main():
         callbacks.append(TrackingCurriculum(int(args.steps), end=args.track_end, start=args.track_start))
     if args.walk_help:
         callbacks.append(WalkHelp(int(args.walk_help)))
+    if args.sprint_penalty is not None:
+        callbacks.append(SprintPenaltyRamp(int(args.steps), args.sprint_penalty))
     if args.max_command_end:
         callbacks.append(CommandRamp(int(args.steps), args.max_command, args.max_command_end))
     callbacks = CallbackList(callbacks)
