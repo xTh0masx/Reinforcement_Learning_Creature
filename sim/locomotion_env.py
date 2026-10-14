@@ -166,11 +166,16 @@ V9_QUALITY = dict(
 # the swing, back level, head low and forward. Added to the likeness (0..1 scores) and the quality costs.
 V12_QUALITY = dict(V9_QUALITY,
     support=1.0,        # walking with fewer than two paws on the ground (a wolf's walk never leaves the ground)
+    palm_flat=0.7,      # per hand on the ground: min(((palm tilt - PALM_FLAT_DEG) / 30 deg)^2, 1) for the WHOLE stance (owner,
+                        # 14 Oct: "it runs on the toes" - the hands stood on their fingertips at -61 deg; the touchdown
+                        # check alone let them roll onto the tips right after landing)
     paw_flat=0.5,       # per touchdown with the paw sole tilted more than PAW_FLAT_DEG (owner: "the paws need to land
                         # normally when sprinting" - not on the claw tips or the side of the paw; arms too)
     high_step=0.5)      # swing paw higher than WOLF_LIFT ((excess / 5 cm)^2)
 BRAKE_DRILL = 0.5            # version 12: after a command above 1.5 m/s, half the next commands are a walk (braking)
+PALM_FLAT_DEG = 15.0         # version 12: palm tilt (deg) allowed while a hand is on the ground
 PAW_FLAT_DEG = 20.0          # version 12: sole tilt (deg) allowed at touchdown; each 20 deg beyond costs 1 (squared)
+WOLF_WALK_MAX = 1.2          # m/s: the wolf reference rules (lift, support, rhythm, wrist fold) apply up to this speed
 WOLF_LIFT = 0.08             # m: highest paw lift in the wolf's walk scaled to the DC (~12 % of leg height)
 WOLF_HEAD_DZ = 0.75          # m: head (neck_s1 origin) above the torso origin (which is at floor level for the DC);
                              # the DC holds it at 0.87 m - the wolf carries its head lower, about at its back's height
@@ -645,13 +650,15 @@ class LocomotionEnv(gym.Env):
                 extra_step=float(np.sum(touchdown & self.is_leg & (self.since_touchdown < 0.6 / f))) if not standing else 0.0)
             wolf = self.version >= 12 and self.front_legs.any()
             if wolf:
-                walking = not standing and abs(self.command[0]) > 0.1
+                walking = not standing and 0.1 < abs(self.command[0]) <= WOLF_WALK_MAX   # the wolf rules are walk rules:
+                # at sprint speed they zeroed the points (high strides and flight phases are normal there, 14 Oct)
                 self.step_rate += (CONTROL_DT / 2.0) * (touchdown / CONTROL_DT - self.step_rate)
                 lift = foot_pos[:, 2] - self.foot_radius
                 swing_legs = self.is_leg & ~foot_contact
                 p["support"] = float(walking and np.sum(foot_contact & self.is_leg) < 2)
                 p["high_step"] = float(np.sum((np.maximum(lift[swing_legs] - WOLF_LIFT, 0.0) / 0.05) ** 2)) if walking else 0.0
                 p["paw_flat"] = self._paw_tilt_cost(touchdown)
+                p["palm_flat"] = self._paw_tilt_cost(foot_contact & self.arm_legs, PALM_FLAT_DEG, scale=30.0, cap=1.0)
             self.since_touchdown = np.where(touchdown, 0.0, self.since_touchdown)
             self.prev_vx_v9 = float(lin[0])
             qw = V12_QUALITY if self.version >= 12 else V9_QUALITY
@@ -1000,7 +1007,7 @@ class LocomotionEnv(gym.Env):
         d.qpos[:] = q_save
         mujoco.mj_kinematics(m, d)
 
-    def _paw_tilt_cost(self, touchdown):
+    def _paw_tilt_cost(self, touchdown, allowed=PAW_FLAT_DEG, scale=20.0, cap=np.inf):
         """Version 12: sum over the paws touching down of ((sole tilt - PAW_FLAT_DEG) / 20 deg)^2; the sole is the
         rounded pad's axis (paw middle -> tip)."""
         cost = 0.0
@@ -1008,7 +1015,7 @@ class LocomotionEnv(gym.Env):
             R = self.data.xmat[self.paw_bodies[i]].reshape(3, 3)
             ax = R @ self.pad_axes[i]
             tilt = math.degrees(math.asin(min(abs(ax[2]) / (np.linalg.norm(ax) + 1e-9), 1.0)))
-            cost += (max(tilt - PAW_FLAT_DEG, 0.0) / 20.0) ** 2
+            cost += min((max(tilt - allowed, 0.0) / scale) ** 2, cap)
         return cost
 
     def _wolf(self, foot_pos, foot_contact, walking):
