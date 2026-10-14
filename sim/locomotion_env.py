@@ -166,6 +166,9 @@ V9_QUALITY = dict(
 # the swing, back level, head low and forward. Added to the likeness (0..1 scores) and the quality costs.
 V12_QUALITY = dict(V9_QUALITY,
     support=1.0,        # walking with fewer than two paws on the ground (a wolf's walk never leaves the ground)
+    crouch=0.6,         # sprint (arms running along): shoulders higher than the sprint pose or nose up - the DC reared up
+                        # (nose 11 deg up, shoulders 0.69 m instead of 0.48) so its hands only reached the ground with
+                        # the fingertips and the front legs hardly touched it (14 Oct)
     palm_flat=0.7,      # per hand on the ground: min(((palm tilt - PALM_FLAT_DEG) / 30 deg)^2, 1) for the WHOLE stance (owner,
                         # 14 Oct: "it runs on the toes" - the hands stood on their fingertips at -61 deg; the touchdown
                         # check alone let them roll onto the tips right after landing)
@@ -173,6 +176,11 @@ V12_QUALITY = dict(V9_QUALITY,
                         # normally when sprinting" - not on the claw tips or the side of the paw; arms too)
     high_step=0.5)      # swing paw higher than WOLF_LIFT ((excess / 5 cm)^2)
 BRAKE_DRILL = 0.5            # version 12: after a command above 1.5 m/s, half the next commands are a walk (braking)
+# version 12 hands on the ground (owner, 14 Oct: "it runs on the toes" -> all of: soft wrist, palm reflex, palm rule,
+# arm brain): while a hand touches the ground its wrist motor goes soft (WRIST_SOFT_KP instead of the body's kp, the
+# weight presses the palm flat like a real wrist giving way) and the wrist's target is the angle that lays the palm
+# parallel to the ground (palm reflex); the brain's wrist command only counts while the hand is in the air
+WRIST_SOFT_KP = 80.0         # (40 could not hold the palm flat under the weight)
 PALM_FLAT_DEG = 15.0         # version 12: palm tilt (deg) allowed while a hand is on the ground
 PAW_FLAT_DEG = 20.0          # version 12: sole tilt (deg) allowed at touchdown; each 20 deg beyond costs 1 (squared)
 WOLF_WALK_MAX = 1.2          # m/s: the wolf reference rules (lift, support, rhythm, wrist fold) apply up to this speed
@@ -302,6 +310,8 @@ class LocomotionEnv(gym.Env):
         if version >= 9:
             self._init_neutral()
         self.neutral_sprint = self.neutral.copy()
+        self.wrist_act = np.zeros(0, int)
+        self.engage = 0.0
         if version >= 12 and self.front_legs.any():
             self._init_sprint_pose()
 
@@ -459,12 +469,15 @@ class LocomotionEnv(gym.Env):
             if self.version >= 12 and self.arm_joint_mask.any():     # arms: small range unless they run along
                 duty = np.broadcast_to(np.asarray(self.gait_targets()[2], dtype=float), (self.nlegs,))
                 engage = float(np.max(duty[self.arm_legs])) / gaits.ARM_DUTY
+                self.engage = engage
                 scales = scales.copy()
                 scales[self.arm_joint_mask] = ARM_IDLE_SCALE + engage * (scales[self.arm_joint_mask] - ARM_IDLE_SCALE)
             neutral = self.neutral
             if self.version >= 12 and self.arm_joint_mask.any() and engage > 0:   # sprint pose: chest lower,
                 neutral = self.neutral + engage * (self.neutral_sprint - self.neutral)   # palms down
             target = self.rest_joints + neutral + a * scales
+            if self.version >= 12 and len(self.wrist_act):
+                target = self._palm_reflex(target)
         self.data.ctrl[self.act_ids] = np.clip(target, self.joint_lo, self.joint_hi)
         return a
 
@@ -658,6 +671,7 @@ class LocomotionEnv(gym.Env):
                 p["support"] = float(walking and np.sum(foot_contact & self.is_leg) < 2)
                 p["high_step"] = float(np.sum((np.maximum(lift[swing_legs] - WOLF_LIFT, 0.0) / 0.05) ** 2)) if walking else 0.0
                 p["paw_flat"] = self._paw_tilt_cost(touchdown)
+                p["crouch"] = self._crouch_cost()
                 p["palm_flat"] = self._paw_tilt_cost(foot_contact & self.arm_legs, PALM_FLAT_DEG, scale=30.0, cap=1.0)
             self.since_touchdown = np.where(touchdown, 0.0, self.since_touchdown)
             self.prev_vx_v9 = float(lin[0])
@@ -941,6 +955,40 @@ class LocomotionEnv(gym.Env):
             return float(np.mean(np.exp(-(dist / ARM_TREX_TOL) ** 2)))
         return float(np.mean(np.exp(-(dist / 0.25) ** 2)))
 
+    def _crouch_cost(self):
+        """Version 12: while the arms run along (self.engage > 0), ((shoulder height above the sprint pose's) / 5 cm)^2
+        + ((nose-up pitch beyond 3 deg) / 10 deg)^2, scaled by how much the arms take part; capped at 3."""
+        if self.engage <= 0:
+            return 0.0
+        d = self.data
+        z = float(np.mean(d.xpos[self.shoulder_bodies, 2]))
+        target = self.shoulder_z - self.engage * self.sprint_drop
+        R = d.xmat[self.torso_body].reshape(3, 3)
+        nose_up = -math.degrees(math.asin(float(np.clip(-R[2, 0], -1, 1))))
+        cost = (max(z - target - 0.02, 0.0) / 0.05) ** 2 + (max(nose_up - 3.0, 0.0) / 10.0) ** 2
+        return self.engage * min(cost, 3.0)
+
+    def _palm_tilt(self, i):
+        """Signed palm tilt (rad) of limb i: + = fingertips up, - = on the fingertips."""
+        ax = self.data.xmat[self.paw_bodies[i]].reshape(3, 3) @ self.pad_axes[i]
+        return math.asin(float(np.clip(ax[2] / (np.linalg.norm(ax) + 1e-9), -1.0, 1.0)))
+
+    def _palm_reflex(self, target):
+        """Version 12: hands on the ground get a soft wrist aiming at a flat palm; in the air the brain's command and
+        the normal stiffness. Uses the contacts of the previous control step."""
+        m, d = self.model, self.data
+        for k, i in enumerate(self.wrist_limbs):
+            j, act = self.wrist_joint[k], self.wrist_act[k]
+            if self.prev_contact[i]:
+                q = d.qpos[self.joint_qpos[j]]
+                target[j] = q - self._palm_tilt(i) / self.wrist_tilt_gain[k]
+                kp = WRIST_SOFT_KP
+            else:
+                kp = self.wrist_kp[k]
+            m.actuator_gainprm[act, 0] = kp
+            m.actuator_biasprm[act, 1] = -kp
+        return target
+
     def _init_sprint_pose(self):
         """Version 12 (owner, 14 Oct: "the hands should open so the palm can touch the ground"): neutral pose for the
         sprint, when the arms run along. The front legs fold so the chest is SPRINT_CROUCH lower; each arm reaches the
@@ -1004,6 +1052,31 @@ class LocomotionEnv(gym.Env):
             pose[idx], err = search(idx, cost, pose[idx].copy())
             self.sprint_arm_error.append(err)
         self.neutral_sprint = pose
+        # palm reflex: which way the wrist tilts the palm (measured in the sprint pose)
+        self.wrist_limbs = np.flatnonzero(self.arm_legs)
+        self.wrist_joint = np.array([i * nj + nj - 1 for i in self.wrist_limbs])
+        self.wrist_act = self.act_ids[self.wrist_joint]
+        self.wrist_kp = m.actuator_gainprm[self.wrist_act, 0].copy()
+        gains = []
+        for k, i in enumerate(self.wrist_limbs):
+            set_pose(pose)
+            t0 = self._palm_tilt(i)
+            off = pose.copy(); off[self.wrist_joint[k]] += 0.02; set_pose(off)
+            gains.append((self._palm_tilt(i) - t0) / 0.02)
+        self.shoulder_bodies = np.array([mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, self.prefix + f"{self.leg_names[i]}_s0")
+                                         for i in self.wrist_limbs])
+        set_pose(self.neutral)
+        z_feet = d.site_xpos[self.foot_sites[self.is_leg], 2].min()
+        self.shoulder_z = float(np.mean(d.xpos[self.shoulder_bodies, 2])) - z_feet       # standing, above the floor
+        set_pose(pose)
+        R2 = d.xmat[self.torso_body].reshape(3, 3)
+        hind = d.site_xpos[self.foot_sites[self.hind_legs]].mean(0)
+        sprint_z = []
+        for b in self.shoulder_bodies:                                          # above the sprint pose's floor
+            pt = d.xpos[b]
+            sprint_z.append(pt[2] - (hind[2] + slope * float(((pt - hind) @ R2)[0])))
+        self.sprint_drop = max(self.shoulder_z - float(np.mean(sprint_z)), 0.0)
+        self.wrist_tilt_gain = np.where(np.abs(gains) < 0.3, np.sign(gains) * 0.3 + (np.array(gains) == 0), gains)
         d.qpos[:] = q_save
         mujoco.mj_kinematics(m, d)
 

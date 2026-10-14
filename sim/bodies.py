@@ -231,7 +231,8 @@ _DC_ARM_LEFT = [(0.62, 0.20, 0.61), (0.79, 0.19, 0.44), (1.02, 0.20, 0.32), (1.0
 # on its end, so it could never open. Now: wrist at the bottom of the curve, hand from the wrist back to the
 # fingertips; the wrist opens up to 200 deg forward-down, so the palm can face the ground (measured on the sculpt).
 _DC_ARM_LEFT_V12 = [(0.62, 0.20, 0.61), (0.79, 0.19, 0.44), (1.06, 0.20, 0.22), (0.88, 0.20, 0.20)]
-DC_WRIST_RANGE_V12 = (-200, 30)                 # deg; negative opens the hand (fingers swing down and forward)
+DC_WRIST_RANGE_V12 = (-250, 30)                 # deg; negative opens the hand (fingers swing down and forward);
+                                                # beyond -180 the wrist bends back under load like a running dog's (14 Oct)
 DC_LEG_RADII = {"hind": (0.075, 0.05, 0.04), "front": (0.07, 0.05, 0.04), "arm": (0.055, 0.045, 0.04)}
 
 
