@@ -162,6 +162,8 @@ def main():
                    help="training stage: commanded speeds up to this (walk first, then trot, run, sprint)")
     p.add_argument("--max-command-end", type=float, default=None,
                    help="sprint stage: raise the command limit from --max-command to this over the run")
+    p.add_argument("--walk-share", type=float, default=None,
+                   help="version 12: share of moving commands kept at walking speed (default 0.5)")
     p.add_argument("--sprint-penalty", type=float, default=None,
                    help="version 12: start weight of the sprint's quality costs, ramped to 1 over the run")
     p.add_argument("--speed-sigma", type=float, default=None,
@@ -206,6 +208,8 @@ def main():
     model.loco_version = args.version          # saved with the brain (play_locomotion.brain_version)
     if args.max_command:
         env.env_method("set_command_limit", args.max_command)
+    if args.walk_share is not None:
+        env.set_attr("walk_share", args.walk_share)
     if args.version >= 2:
         model.set_mirror(mirror_maps(LocomotionEnv(args.species, version=args.version)))
 

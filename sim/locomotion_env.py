@@ -165,6 +165,8 @@ V9_QUALITY = dict(
 # (front and hind at the same rate), 2-3 paws always on the ground, paws lifted low with the front wrist folding under in
 # the swing, back level, head low and forward. Added to the likeness (0..1 scores) and the quality costs.
 V12_QUALITY = dict(V9_QUALITY,
+    bounce=5.0,         # (v9: 3.0) owner, 14 Oct: "clunky rather than fluid" - 6 cm bob and speed swings of +-0.33 m/s
+    surge=0.6,          # (v9: 0.2) within a stride at the walk; short hurried irregular steps (37 % timing variation)
     support=1.0,        # walking with fewer than two paws on the ground (a wolf's walk never leaves the ground)
     posture=1.0,        # trunk sagging below the standing height, and when standing paws far from the standing pose
                         # (owner, 14 Oct: "why does it make a plank position" - legs stretched 40 cm back / 13 cm
@@ -700,6 +702,8 @@ class LocomotionEnv(gym.Env):
             tol_w = (0.5 * abs(self.command[1]) + 0.15) * max(self.track_scale, 0.5)
             tracking = math.exp(-lin_err / tol_v ** 2) * math.exp(-ang_err / tol_w ** 2)
             likeness = [gait_score, 1.0 if standing else style_score]
+            if self.version >= 12:              # the step rhythm counts double (fluid, regular steps)
+                likeness.append(gait_score)
             if self.arm_legs.any():                         # DC: panther traits
                 likeness.append(self.register_ema)
                 if idle_arms.any():
