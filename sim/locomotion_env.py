@@ -112,6 +112,9 @@ ARM_TUCK = (0.80, 0.20, 0.42)   # version 6: folded claw position in the torso f
 # now the hand reaches forward and slightly down, wrist almost straight
 ARM_TREX_CLAW = (1.20, 0.22, 0.55)
 ARM_TREX_ELBOW = (0.82, 0.25, 0.50)
+ARM_IDLE_SCALE = 0.3         # rad per action unit for the arm joints while the arms are not part of the gait (walk);
+                             # full ARM range (1.8) only in the sprint - the brain had learned to keep the wrists bent
+                             # 70-90 deg ("hands permanently tucked in"); now they stay within +-17 deg of the T-rex pose
 ARM_TREX_TOL = 0.20          # m: arms may swing this far around the pose (balancing) and still score well
 ANKLE_FOLD = 0.3                # version 6: ankle / wrist fold in mid-swing (rad); flat (no rhythm) in stance
 # version 9: natural standing pose = the neutral position the brain's commands work around (13 Oct: on the mesh bodies
@@ -442,7 +445,13 @@ class LocomotionEnv(gym.Env):
         elif self.version == 10:                # standing pose + tripod rhythm + the brain's correction
             target = self.rest_joints + self.neutral + self.cpg_targets() + a * CPG_RESIDUAL_V10
         else:
-            target = self.rest_joints + self.neutral + a * self.action_scales
+            scales = self.action_scales
+            if self.version >= 12 and self.arm_joint_mask.any():     # arms: small range unless they run along
+                duty = np.broadcast_to(np.asarray(self.gait_targets()[2], dtype=float), (self.nlegs,))
+                engage = float(np.max(duty[self.arm_legs])) / gaits.ARM_DUTY
+                scales = scales.copy()
+                scales[self.arm_joint_mask] = ARM_IDLE_SCALE + engage * (scales[self.arm_joint_mask] - ARM_IDLE_SCALE)
+            target = self.rest_joints + self.neutral + a * scales
         self.data.ctrl[self.act_ids] = np.clip(target, self.joint_lo, self.joint_hi)
         return a
 
