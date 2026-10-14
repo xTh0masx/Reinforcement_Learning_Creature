@@ -242,6 +242,7 @@ class LocomotionEnv(gym.Env):
         self.command_limit = None           # training stage: highest commanded speed (set_command_limit)
         self.walk_help = 0.0                # training start-up help: bonus for forward progress (set_walk_help)
         self.sprint_penalty = 1.0           # version 12: weight of the quality costs at sprint speed (set_sprint_penalty)
+        self.walk_share = WALK_SHARE        # version 12: share of moving commands kept at walking speed
         self.w = dict(WEIGHTS[version])
         if version >= 5:
             self.w.update(STEADY_TRUNK_V5.get(species, {}))
@@ -420,7 +421,7 @@ class LocomotionEnv(gym.Env):
         else:
             top = min(self.top_speed, self.command_limit or self.top_speed)
             v = rng.uniform(-sp.max_backward_speed, sp.max_speed) if self.version == 1 else rng.uniform(0.1, top)
-            if self.version >= 12 and top > WOLF_WALK_MAX and rng.uniform() < WALK_SHARE:
+            if self.version >= 12 and top > WOLF_WALK_MAX and rng.uniform() < self.walk_share:
                 v = rng.uniform(0.1, WOLF_WALK_MAX)            # keep practising the walk
             if self.version >= 12 and self.command_target[0] > 1.5 and rng.uniform() < BRAKE_DRILL:
                 v = rng.uniform(0.0, 0.8)                      # braking drill: from a run straight back to a walk

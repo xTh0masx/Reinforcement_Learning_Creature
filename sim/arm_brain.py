@@ -15,13 +15,16 @@ import numpy as np
 from sim.locomotion_env import LocomotionEnv
 
 ARM_BONUS = 0.5          # weight of the arm's own score next to the walking reward
+ARM_WALK_SHARE = 0.25    # arm training: most moving commands are runs / sprints (the arms only run along from 2 m/s)
+ARM_COMMAND_LIMIT = 3.0  # m/s
 
 
 class ArmEnv(gym.Env):
-    def __init__(self, main_path, command_limit=4.0, **env_kwargs):
+    def __init__(self, main_path, command_limit=ARM_COMMAND_LIMIT, **env_kwargs):
         from play_locomotion import Brain
         self.env = LocomotionEnv("dc", version=12, **env_kwargs)
         self.env.set_command_limit(command_limit)
+        self.env.walk_share = ARM_WALK_SHARE
         self.main = Brain(main_path, "dc")
         self.main.version = 12
         self.arm = self.env.arm_joint_mask

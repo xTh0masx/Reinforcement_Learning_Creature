@@ -57,6 +57,14 @@ def main():
             if now - last_poll > args.poll:
                 last_poll = now
                 cks = checkpoints(args.run)
+                arm_now = checkpoints(args.arm_run)[-1][1] if args.arm_run and checkpoints(args.arm_run) else None
+                if arm_now != getattr(main, "arm_loaded", None):
+                    main.arm_loaded = arm_now
+                    if arm_now is not None:
+                        brain = load(loaded)
+                        obs, _ = env.reset(seed=0, options={"command": (0.0, 0.0)})
+                        seg, seg_left = 0, 0.0
+                        print(f"now showing arm brain {arm_now}")
                 if cks and cks[-1][1] != loaded:
                     steps, loaded = cks[-1]
                     brain = load(loaded)
