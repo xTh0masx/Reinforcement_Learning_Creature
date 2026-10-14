@@ -63,11 +63,6 @@ class HabitatStats(BaseCallback):
         self.logger.record("habitat/hits_per_10min", per10("hits"))
         self.logger.record("habitat/intruders_repelled_per_10min", per10("intruders_repelled"))
         self.logger.record("habitat/survived_fraction", float(np.mean([s["steps"] / 6000 for s in st])))
-        if "won" in st[-1] and any(s["steps"] <= 2100 for s in st):      # game mode (3 min hunt + 30 s)
-            self.logger.record("game/points", float(np.mean([s["points"] for s in st])))
-            self.logger.record("game/survived", float(np.mean([s["survived"] for s in st])))
-            self.logger.record("game/won", float(np.mean([s["won"] for s in st])))
-            self.logger.record("game/drew", float(np.mean([s["drew"] for s in st])))
 
 
 def main():
@@ -87,8 +82,6 @@ def main():
     p.add_argument("--rival-intrude", type=float, default=0.5, help="share of days the scripted rival invades")
     p.add_argument("--low-stock", type=float, default=0.3, help="share of days starting with 1-2 prey at home")
     p.add_argument("--obs-version", type=int, default=2)
-    p.add_argument("--game", action="store_true",
-                   help="owner's game (14 Oct): 3 min hunt for points, then 30 s to the water hole or die")
     args = p.parse_args()
     run = args.run or f"{args.species[:3]}_brain_v1"
     torch.set_num_threads(2)
@@ -96,10 +89,8 @@ def main():
     others = [{"species": args.rival, "brain": args.rival_brain, "intrude_prob": args.rival_intrude}] \
         if args.rival else None
     env = make_vec_env(CreatureEnv, n_envs=args.envs, seed=args.seed, vec_env_cls=SubprocVecEnv,
-                       env_kwargs={"species": args.species, "others": others,
-                                   "obs_version": 3 if args.game else args.obs_version,
-                                   "reward_version": 3 if args.game else 2,
-                                   "low_stock_prob": 0.0 if args.game else args.low_stock})
+                       env_kwargs={"species": args.species, "others": others, "obs_version": args.obs_version,
+                                   "low_stock_prob": args.low_stock})
     env = VecFrameStack(env, n_stack=3)
     if args.resume:
         from play_locomotion import vecnormalize_path          # handles models/<run> and checkpoints/<run>_<N>_steps

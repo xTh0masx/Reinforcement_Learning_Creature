@@ -9,11 +9,10 @@ import math
 
 import numpy as np
 
-from sim.creature_env import DT, GAME_HUNT_STEPS, NEUTRAL, RAYS, _wrap
+from sim.creature_env import NEUTRAL, RAYS, _wrap
 
 RAID_BELOW = 2          # raid once the home stock is down to this many prey
 SPRINT_RANGE = 8.0      # m, sprint only this close to the prey (sprinting all the way exhausts the creature)
-GAME_SAFETY = 8.0       # s, game mode: leave for the water hole this much earlier than the trip needs
 
 
 class ScriptedPredator:
@@ -33,33 +32,8 @@ class ScriptedPredator:
         speed = sp.walk_speed / sp.max_speed
         alive = env.prey_alive
         d = np.linalg.norm(env.prey_pos - c.pos, axis=1)
-        game = getattr(env, "game", False)
 
-        if game:
-            # Game mode: hunt all the time, head for the water hole when the trip (at 80 % top speed) plus a safety
-            # margin uses up the time that is left, then wait in it.
-            water = env.habitat.water
-            dist = float(np.hypot(*(water.center - c.pos)))
-            left = (env.episode_steps - env.t) * DT
-            v_trip, _, _ = env.command(np.array([env.speed_action(c, 0.8), 0.0]), c)   # what it can still manage
-            v_trip = max(v_trip * 0.85, 0.05)                    # fatigue keeps rising on the way
-            if env.t >= GAME_HUNT_STEPS or dist / v_trip + GAME_SAFETY > left:
-                if dist < water.r * 0.5:
-                    return np.array([env.speed_action(c, 0.0), 0.0])
-                target, speed = water.center, 0.8
-            elif alive.any():
-                home = alive & (env.prey_area == c.zone)
-                raid = alive & (env.prey_area != c.zone) & (env.prey_area != NEUTRAL)
-                pool = home if home.sum() > RAID_BELOW or not raid.any() else raid
-                pool = pool if pool.any() else alive
-                dd = np.where(pool, d, np.inf)
-                i = int(np.argmin(dd))
-                target = env.prey_pos[i]
-                if dd[i] < SPRINT_RANGE and c.fatigue < 0.5:      # sprint only while fresh
-                    speed = 1.0
-            else:
-                target = c.home.center
-        elif c.fatigue > 0.7 or (c.fatigue > 0.2 and c.activity == "rest"):
+        if c.fatigue > 0.7 or (c.fatigue > 0.2 and c.activity == "rest"):
             spots = [s for s in env.habitat.rest_spots if c.home.contains(s.center)] or env.habitat.rest_spots
             s = min(spots, key=lambda s: s.distance(c.pos))
             if s.distance(c.pos) < s.r * 0.5:
