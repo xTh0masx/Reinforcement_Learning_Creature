@@ -178,6 +178,8 @@ V12_QUALITY = dict(V9_QUALITY,
     paw_flat=0.5,       # per touchdown with the paw sole tilted more than PAW_FLAT_DEG (owner: "the paws need to land
                         # normally when sprinting" - not on the claw tips or the side of the paw; arms too)
     high_step=0.5)      # swing paw higher than WOLF_LIFT ((excess / 5 cm)^2)
+PLANK_SAG = 0.12             # version 12: trunk more than this below the standing height counts as a fall - the DC lay
+                             # down in a "plank" (18 cm low, legs stretched) instead of standing / walking slowly (14 Oct)
 WALK_SHARE = 0.5             # version 12: half of the moving commands stay walks (<= WOLF_WALK_MAX) whatever the sprint
                              # limit - with mostly sprint commands the DC forgot to walk and stood crouched (14 Oct)
 SPRINT_PENALTY_FROM, SPRINT_PENALTY_FULL = 1.2, 2.5   # m/s: the quality costs blend to self.sprint_penalty between these
@@ -727,8 +729,9 @@ class LocomotionEnv(gym.Env):
             self._resample_command()
 
         max_tilt = MAX_TILT_V8 if self.version >= 8 else 60.0
+        min_z = self.stand_z - (PLANK_SAG if self.version >= 12 else 0.5 * self._leg_height())
         fallen = (grav[2] > -math.cos(math.radians(max_tilt))
-                  or d.qpos[self.q0 + 2] < self.stand_z - 0.5 * self._leg_height())
+                  or d.qpos[self.q0 + 2] < min_z)
         terminated = bool(fallen)
         if terminated:
             reward -= 10.0
@@ -972,17 +975,18 @@ class LocomotionEnv(gym.Env):
         return float(np.mean(np.exp(-(dist / 0.25) ** 2)))
 
     def _posture_cost(self, foot_pos, standing):
-        """Version 12: ((sag below the standing height - 4 cm) / 5 cm)^2, plus when standing the mean
-        ((paw fore/aft distance from the standing pose - 8 cm) / 5 cm)^2 of the legs; capped at 3."""
+        """Version 12: (sag below the standing height - 4 cm) / 3 cm (linear, uncapped - capped at 3 the brain got no
+        signal while lying 18 cm low), plus when standing the mean (paw fore/aft distance from the standing pose
+        - 8 cm) / 5 cm of the legs."""
         d = self.data
         sag = max(self.stand_z - float(d.qpos[self.q0 + 2]) - 0.04, 0.0)
-        cost = (sag / 0.05) ** 2
+        cost = sag / 0.03
         if standing:
             R = d.xmat[self.torso_body].reshape(3, 3)
             x = ((foot_pos - d.xpos[self.torso_body]) @ R)[:, 0]
             dev = np.maximum(np.abs(x - self.foot_rest_x) - 0.08, 0.0)[self.is_leg]
-            cost += float(np.mean((dev / 0.05) ** 2))
-        return min(cost, 3.0)
+            cost += float(np.mean(dev / 0.05))
+        return cost
 
     def _crouch_cost(self):
         """Version 12: while the arms run along (self.engage > 0), ((shoulder height above the sprint pose's) / 5 cm)^2
