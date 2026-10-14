@@ -166,6 +166,9 @@ V9_QUALITY = dict(
 # the swing, back level, head low and forward. Added to the likeness (0..1 scores) and the quality costs.
 V12_QUALITY = dict(V9_QUALITY,
     support=1.0,        # walking with fewer than two paws on the ground (a wolf's walk never leaves the ground)
+    posture=1.0,        # trunk sagging below the standing height, and when standing paws far from the standing pose
+                        # (owner, 14 Oct: "why does it make a plank position" - legs stretched 40 cm back / 13 cm
+                        # forward, trunk 16 cm low; the plank was so stable that standing still in it paid best)
     crouch=0.6,         # sprint (arms running along): shoulders higher than the sprint pose or nose up - the DC reared up
                         # (nose 11 deg up, shoulders 0.69 m instead of 0.48) so its hands only reached the ground with
                         # the fingertips and the front legs hardly touched it (14 Oct)
@@ -679,6 +682,7 @@ class LocomotionEnv(gym.Env):
                 p["high_step"] = float(np.sum((np.maximum(lift[swing_legs] - WOLF_LIFT, 0.0) / 0.05) ** 2)) if walking else 0.0
                 p["paw_flat"] = self._paw_tilt_cost(touchdown)
                 p["crouch"] = self._crouch_cost()
+                p["posture"] = self._posture_cost(foot_pos, standing)
                 p["palm_flat"] = self._paw_tilt_cost(foot_contact & self.arm_legs, PALM_FLAT_DEG, scale=30.0, cap=1.0)
             self.since_touchdown = np.where(touchdown, 0.0, self.since_touchdown)
             self.prev_vx_v9 = float(lin[0])
@@ -885,6 +889,7 @@ class LocomotionEnv(gym.Env):
         feet_neutral = foot_body()
         z_neutral = feet_neutral[self.is_leg, 2].min()
         self.foot_rest_y = np.abs(feet_neutral[:, 1])            # paw track of the standing pose
+        self.foot_rest_x = feet_neutral[:, 0].copy()             # version 12: paws fore / aft in the standing pose
         self.init_qpos[self.joint_qpos] = self.rest_joints + self.neutral
         self.init_qpos[self.q0 + 2] += z_rest - z_neutral            # feet stay on the floor
         if not self.shared:
@@ -965,6 +970,19 @@ class LocomotionEnv(gym.Env):
             dist = 0.5 * (dist + np.linalg.norm(elbow - self.elbow_target[idle], axis=1))
             return float(np.mean(np.exp(-(dist / ARM_TREX_TOL) ** 2)))
         return float(np.mean(np.exp(-(dist / 0.25) ** 2)))
+
+    def _posture_cost(self, foot_pos, standing):
+        """Version 12: ((sag below the standing height - 4 cm) / 5 cm)^2, plus when standing the mean
+        ((paw fore/aft distance from the standing pose - 8 cm) / 5 cm)^2 of the legs; capped at 3."""
+        d = self.data
+        sag = max(self.stand_z - float(d.qpos[self.q0 + 2]) - 0.04, 0.0)
+        cost = (sag / 0.05) ** 2
+        if standing:
+            R = d.xmat[self.torso_body].reshape(3, 3)
+            x = ((foot_pos - d.xpos[self.torso_body]) @ R)[:, 0]
+            dev = np.maximum(np.abs(x - self.foot_rest_x) - 0.08, 0.0)[self.is_leg]
+            cost += float(np.mean((dev / 0.05) ** 2))
+        return min(cost, 3.0)
 
     def _crouch_cost(self):
         """Version 12: while the arms run along (self.engage > 0), ((shoulder height above the sprint pose's) / 5 cm)^2
