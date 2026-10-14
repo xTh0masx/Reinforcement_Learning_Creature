@@ -32,3 +32,12 @@ dc_legs_v5c,2026-09-30,3ab3c31,dc,12507536,-,DC walker (showcase),head x3 + spee
 dc_legs_v8,2026-09-30,81183a1,dc,4300000,-,failed (collapse),mesh body + sprint: handstand fixed by 25 deg fall; best 0.37 m/s at 2.75M; standing still from 3.2M
 dc_legs_v9_s1f,2026-10-13,46ffd44,dc,8006608,-,best DC on v9 at 7.5M,0.65 m/s; trunk 3.7 deg; lateral footfall order; hind legs 2-4 steps per cycle
 myr_legs_v10,2026-10-13,ffc1d80,myrranox,3000000,-,RELEASED,tripod step generator + corrections; abdomen density 0.25: 0.52/1.08 m/s; spot turn 56/72; backwards -0.26/-0.30; knee 60; abdomen clear; no falls; front legs 21 % on the ground
+dc_legs_v11,2026-10-13,09cd04a,dc,9509552,-,done,lean body: no tripping 1.0 steps/s; trunk <=2 deg; slow 0.23/0.80 m/s at 0.6/1.2
+dc_legs_v12,2026-10-13,2355814,dc,11509552,-,stage,218-piece body + wolf rules: 0.42/0.71 m/s; rhythm 5 %; neck pinned
+dc_legs_v12b,2026-10-14,0be6378,dc,12509552,-,failed,legs pulled in to the stop (rule bugs): 0.11 m/s
+dc_legs_v12c,2026-10-14,3c604d9,dc,12259552,-,best walk rhythm,0.45/0.73 m/s; rhythm 1-5 %; stopped when the session ended
+dc_legs_v12f,2026-10-14,16a0f8f,dc,12509552,-,stage,T-rex arms + weight to the back: 0.37/0.61 m/s; rhythm 1 %
+dc_legs_v12h,2026-10-14,1c7e7e9,dc,15259552,-,stage,new hand; hands on fingertips -61 deg in the sprint
+dc_legs_v12q,2026-10-14,1a4a7e7,dc,16009552,-,failed,palm/crouch rules at full sprint costs: unlearned walking (0 m/s)
+dc_arms_v1,2026-10-14,57cff1f,dc,70000,-,stopped,arm brain experiment; arms dropped from the sprint (owner)
+dc_legs_v12u,2026-10-14,5578ab6,dc,-,-,running,T-rex arms at every speed; four-legged sprint 1.2->4.0; start 0.63/0.82 walk; 1.55/1.76 at 2.5/4.0

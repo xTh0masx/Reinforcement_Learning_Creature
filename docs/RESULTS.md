@@ -339,6 +339,48 @@ Measurements: `docs/evaluations/` and the session's checkpoints; videos `docs/vi
 `docs/figures/*_physics_body_mesh.jpg`, standing poses `docs/figures/standing_pose_v9.png`; presentation
 `docs/presentation/Endemic_Creatures_RL.pptx`.
 
+## 6i. DC walking v12 – detailed body, wolf reference, T-rex arms, new hand (13–14 Oct)
+
+**Detailed physics body.** The owner wanted the DC's physics body "as close as possible to the real model". The
+full-detail sculpt (953k vertices, claws, teeth) is split by bone and decomposed with CoACD (approximate convex
+decomposition, the tool used for MuJoCo's model collection) into **218 convex pieces** instead of 24 single hulls;
+spikes, horns, the open jaw, the shoulder hump and the belly line are now part of the body. Spikes and horns get a
+third of the density (the centre of mass rose 9 cm otherwise). Physics speed is unchanged (1,235 vs 1,311 steps/s).
+
+| Part | single hull → pieces (95 % of the surface within) |
+| --- | --- |
+| Torso / neck / rear body | 18.1 → 3.3 cm / 13.4 → 4.3 cm / 12.9 → 3.0 cm |
+| Upper legs / lower legs and paws | 7.7–10.9 → 3.1–4.2 cm / 1.9–4.9 → 1.2–2.4 cm |
+| Head / hand (after the remodel) | 6.9 → 3.7 cm / 3.9 → 1.4 cm |
+
+**Wolf reference.** The owner's target movement is a wolf walk cycle (Sketchfab model, screen recording). Rules from
+it (walking only, up to 1.2 m/s): front and hind legs step at the same rate, at least two paws on the ground, paws
+lifted at most 8 cm, the front wrist folds under in the swing, head carried low (neck rest pose 16° lower).
+
+**Weight, arms and hand (owner requests, 14 Oct).**
+- More weight on the hind legs (9 % each) and tail (5.5 %), lighter head (2.5 %) and neck (4 %): front/hind 55/45 →
+  50/50 – the DC fell forward at speed.
+- Arms held like a T-rex: upper arm forward, hands extended in front of the chest, above the front legs' swing;
+  forearm and hand collide with the front legs; while the arms are not part of the gait the brain may move them only
+  ±17° (it had learned to keep the wrists bent 70–90°).
+- The hand was remodelled: in the real model the forearm curves down and the hand hangs folded back like a hook. The
+  old physics wrist sat 10 cm too high, inside the curve, so the hand could never open. Now the wrist is at the bottom
+  of the curve, the hand runs back to the fingertips and opens up to 250° (palm to the ground); the Blender rig was
+  changed the same way (`rig_dc.remodel_hands`).
+- Arms in the sprint were tried (arms join from 2.0 m/s, crouched sprint pose with palms flat, soft wrist + palm
+  reflex, palm and crouch rules, a separate arm brain `sim/arm_brain.py`). The hands still ran on their fingertips
+  (−61°) because the DC reared up (nose 11° up, shoulders 0.69 instead of 0.48 m). **Owner decision: no arms in the
+  sprint** – T-rex arms at every speed, the DC sprints on four legs.
+
+**Training.** Many short stages (training log rows 23–32); the lessons are in section 8. Current brain (start of run
+`dc_legs_v12u`, T-rex arms, four-legged sprint): 0.63 / 0.82 m/s at the 0.6 / 1.0 m/s commands, 1.55 / 1.76 m/s at
+the 2.5 / 4.0 m/s commands, trunk level (≤ 3°), no falls. The sprint stage (limit 1.2 → 4.0 m/s, braking drills,
+half the commands still walks, sprint costs ramped from 35 % to full) is running.
+
+Figures: `figures/dc_physics_body_v11_vs_v12.jpg`, `figures/wolf_reference_frames.png`,
+`figures/dc_arms_folded_vs_trex.png`, `figures/dc_trex_arms_walk.png`, `figures/dc_hand_real_model_closeup.png`,
+`figures/dc_hand_v12_poses.png`, `figures/dc_hand_v12_rig_folded_open.png`, `figures/dc_sprint_pose_palms.png`.
+
 ## 7. Videos and graphs
 
 | File | What it shows |
@@ -359,7 +401,8 @@ Measurements: `docs/evaluations/` and the session's checkpoints; videos `docs/vi
 | `videos/showcase_side_by_side_v4.mp4` | **Showcase v4, 5:00**: both creatures on walking v4 (precise + fluid), rock-dodging side cameras |
 | `videos/showcase_side_by_side_v3.mp4` | **Showcase v3, 5:00**: the same with the alive DC (walking v3) and Myrranox v2 + passive parts; cameras dodge rocks |
 | `videos/myr_legs_v10_training.mp4`, `videos/myr_legs_v5_vs_v10.mp4` | **Myrranox walking v10**: whole training (0 → 3M) and v5 vs v10 on the same commands |
-| `presentation/Endemic_Creatures_RL.pptx` | Project presentation (German, 38 slides) |
+| `presentation/Endemic_Creatures_RL.pptx` | Project presentation (German, updated 14 Oct incl. DC v12) |
+| `figures/dc_physics_body_v11_vs_v12.jpg`, `figures/dc_hand_*.png`, `figures/dc_*arms*.png`, `figures/wolf_reference_frames.png` | **DC v12**: detailed body, real hand vs physics hand, T-rex arms, sprint pose, wolf reference frames |
 | `videos/myr_legs_v4_vs_v5.mp4`, `videos/dc_legs_v4_vs_v5.mp4`, `videos/*_legs_v5*_training.mp4` | **Walking v5 (natural style)**: insect knees / panther stride before vs after; whole v5 trainings |
 | `videos/*_legs_v4_training.mp4`, `videos/myr_legs_v2_vs_v4.mp4`, `videos/dc_legs_v3_vs_v4.mp4` | **Walking v4 (precise + fluid)**: whole fine-tuning (4M → 7M, every 250k) next to the learning curve; before / after on the same commands |
 | `figures/locomotion/*_legs_v4/`, `figures/gait/*_legs_v4_*` | v4 progress graphs, checkpoint clips, footfall diagrams (incl. Myrranox spot turn `myr_legs_v4_footfall_0.00.png`) |
@@ -390,10 +433,21 @@ Live during training: `tensorboard --logdir runs`, `python watch_locomotion.py -
 11. 2D-trained decisions must match what the legs can do: the DC transferred to the physics body, the Myrranox did not
     (no turning on the spot). Use the same energy model in training and playback.
 12. Training runs inside the Claude session – closing the app stops it; frequent checkpoints make restarts cheap.
+    A sleeping laptop pauses it too (14 Oct: twice, about 6 h and 1.5 h lost) – keep it plugged in and awake.
+13. (v12) Scope every rule to the movement it describes: the wolf's walking rules (low paws, two paws down) applied
+    in the sprint and set its quality to zero.
+14. (v12) A new skill that earns nothing at full penalties makes the brain unlearn the old one (v12q stood still at
+    walking commands): keep practising the old skill and ramp the new skill's penalties.
+15. (v12) Check the geometry before training a behaviour: the arms could not reach the ground, and the hand's joint
+    sat in the wrong place – no reward could have taught a flat palm.
+16. (v12) When a body pose changes under a trained brain, shift its observation reference by the same amount;
+    otherwise it no longer recognises its own posture and stands still.
 
 ## 9. Next (open)
 
-- Myrranox: walking backwards (v4 still fails); fine-tuning its predator brain with the physics body (plan D2);
+- DC v12: finish the four-legged sprint stage (`dc_legs_v12u`, braking from a sprint without falling), then measure
+  against the wolf targets (stride, paw track, head height) and release a new DC walker; re-record the showcase with it.
+- Myrranox: walking v10 is final (owner, 13 Oct); fine-tuning its predator brain with the physics body (plan D2);
   fatigue balance (owner decision).
 - Raids and territory defence (not learned); alternating rounds against the other species' trained brain.
 - Final scene: 2 Myrranox + 2 DC; terrain/props; relink the Myrranox textures and re-render.

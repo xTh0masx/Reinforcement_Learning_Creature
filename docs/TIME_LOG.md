@@ -115,6 +115,17 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | 17:20 – 17:55 | 0.6 h | Presentation (38 slides) | `934db12` |
 | 18:30 – 19:15 | 0.7 h | Myrranox front-leg analysis → abdomen density; DC lean body v11 | `ffc1d80`, `09cd04a` |
 
+## Session 9 – 13/14 Oct (DC v12: detailed body, wolf, arms, hand)
+
+| Time | Duration | Step | Result |
+| --- | --- | --- | --- |
+| 13.10 20:15 – 22:50 | 2.6 h | Detailed body (sculpt export, CoACD 218 pieces, overlay), wolf video analysis, v12 rules | `2355814` |
+| 22:55 – 00:30 | 1.6 h (+ compute) | v12 training, neck rest pose, rule bugs found (joint limit, narrow paws) | `0be6378`, `3c604d9` |
+| 00:30 – 06:20 | – | session ended, training stopped (lost night) | – |
+| 06:20 – 08:40 | 2.3 h | resume (laptop asleep / on battery), T-rex arms, weight to the back, arm collision | `bed6ae9` … `16a0f8f` |
+| 08:40 – 11:40 | 3.0 h | sprint stage, hands, hand remodel (rig + CoACD), palm rules, soft wrist, crouch, arm brain | `f51ab6c` … `cb6270e` |
+| 11:40 – 13:45 | 2.1 h (1.4 h laptop asleep) | v12r, arm brain, arms dropped from the sprint, v12u, documentation | `4eb9c67` … |
+
 ## Compute per training run
 
 | Run | Start → end | Wall time | Steps | Outcome |
@@ -135,6 +146,7 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | Showcase v4 render | 28.09 13:13 → 18:05 | 4.9 h | 18 002 frames | video |
 | myr/dc_legs_v5_pilot | 29.09 09:40 → 09:50 | 0.2 h | 2 × 0.5M | DC ok, Myr knee locked |
 | myr_legs_v5, dc_legs_v5, dc_legs_v5b | 29.09 09:52 → 12:50, 30.09 08:20 → 08:40 | 3.3 h | 3M + 1.5M + 2M | Myr recommended, DC mixed |
+| DC v12 stages (v12 … v12u, arm brain) | 13.10 22:55 → 14.10 13:30 | ~6 h active (+ 7.5 h stopped / asleep) | ~10M | v12u running |
 | v9 / v10 / v11 stages | 13.10 09:20 → 20:30 | ~9 h (2 runs in parallel) | ~20M | Myrranox v10 released |
 | Showcase v4 no-rocks render | 28.09 18:25 → 21:50, 29.09 08:11 → 09:02 | 4.3 h | 18 002 frames | video |
 

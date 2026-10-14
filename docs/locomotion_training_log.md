@@ -44,7 +44,17 @@ speed/turn commands every 2–5 s, 15 % standing), PPO with 8 parallel environme
 | 19 | 30 Sep 2026 | `dc_legs_v8` | DC | 8M planned, stopped ~4.3M | v8: mesh hull body, sprint 4 m/s, ramps, no unnecessary movement | Handstand on front legs + arms (→ 25° tilt = fall); best 0.37 m/s at 2.75M, collapsed into standing still from 3.2M. |
 | 20 | 13 Oct 2026 | `*_legs_v9_s1`…`s1f` | both | stages of 0.5–2M | v9: multiplicative reward, mesh bodies, standing pose; series of fixes (noise, reward statistics, command ranges, false falls) | DC: correct lateral footfall order, 0.65 m/s, trunk 3.7° (best at 7.5M) but hind legs tripping; Myrranox: stepping in place, then a 'wheelbarrow'. |
 | 21 | 13 Oct 2026 | `myr_legs_v10` | Myrranox | **0 → 3M** (abdomen density changed at 1.75M) | v10: tripod step generator + corrections, lighter abdomen | **Released.** 0.52 / 1.08 m/s, spot turns 56 °/s, walks backwards (−0.26) for the first time, trunk level, knee 60°, abdomen clear, tripod 87 %, no falls; front legs still too little on the ground (21 %). |
-| 22 | 13 Oct 2026 | `dc_legs_v11` | DC | from 7.5M, 2M | v11: big-cat mass distribution, rounded paw pads | training |
+| 22 | 13 Oct 2026 | `dc_legs_v11` | DC | 7.5M → 9.5M | v11: big-cat mass distribution, rounded paw pads | No more tripping (1.0 steps/s every leg), trunk ≤ 2°, no falls, but slow: 0.23 m/s at 0.6, 0.80 at 1.2. |
+| 23 | 13 Oct 2026 | `dc_legs_v12` | DC | 9.5M → 11.5M | v12: 218-piece body, light spikes, wolf rules | +2M: 0.42 / 0.71 m/s, very even rhythm (5 %), but the neck command pinned at its limit (head target unreachable). |
+| 24 | 14 Oct 2026 | `dc_legs_v12b` | DC | 11.5M → 12.5M | wolf head as the neck's rest pose | Pulled all legs in to the stop, shuffled at 0.11 m/s – two rule bugs (joint-limit margin, narrow paws free). |
+| 25 | 14 Oct 2026 | `dc_legs_v12c` | DC | 11.5M → 12.3M | rule fixes, from the 11.5M brain | Best at +500k: 0.45 / 0.73 m/s, rhythm 1–5 %; the session ended at 12.26M (night lost). |
+| 26 | 14 Oct 2026 | `dc_legs_v12d/e/f` | DC | from 12.0M | T-rex arms, weight to the back, arm / front-leg collision | +500k: 0.37 / 0.61 m/s, rhythm 1 %, no falls. |
+| 27 | 14 Oct 2026 | `dc_legs_v12s` | DC | 12.5M → 14.0M | sprint stage: arms from 2 m/s, flat paws, braking drills, limit ramp | Walk improved (0.63 / 0.81 m/s); hands stayed tucked → limited arm range. |
+| 28 | 14 Oct 2026 | `dc_legs_v12h` | DC | 14.0M → 15.3M | remodelled hand (wrist at the real wrist) | Hands on the fingertips (−61°); the wolf rules had zeroed the sprint's quality. |
+| 29 | 14 Oct 2026 | `dc_legs_v12p`, `v12q` | DC | 15.3M → 16.0M | palm rule, soft wrist + palm reflex, crouch cost | DC reared up in the sprint; v12q unlearned walking (0 m/s at walking commands). |
+| 30 | 14 Oct 2026 | `dc_legs_v12r` | DC | 14.0M → 14.3M | half the commands walks, sprint costs ramped | Stopped for the arm brain. |
+| 31 | 14 Oct 2026 | `dc_arms_v1` | DC arms | 70k (stopped) | separate arm brain, walking brain frozen | Laptop asleep 1.4 h; stopped when the owner dropped the arms from the sprint. |
+| 32 | 14 Oct 2026 | `dc_legs_v12u` | DC | 14.0M → 18.0M | T-rex arms at every speed, four-legged sprint (limit 1.2 → 4.0) | **running**; start: 0.63 / 0.82 m/s walking, 1.55 / 1.76 m/s at 2.5 / 4.0, no falls. |
 
 Reward values are **not comparable between sessions** — the reward definition changed each time.
 Compare sessions by the evaluation metrics (`metrics.csv`: speed/turn tracking error, falls, foot slip).
@@ -127,6 +137,11 @@ Untested idea: smaller movement ranges for the new Myrranox head/abdomen joints 
 11. (v5) Watch the raw policy outputs, not only the joint angles: a joint whose mean command drifts beyond the action
     limit is clipped, gets no learning signal and freezes for good (Myrranox knees from v2 2M on). Shifting the
     output bias back inside the range revived the knee within one run.
+17. (v12) A "near the joint limit" margin must scale with the range: 5° on a ±8° joint meant "always at the limit".
+18. (v12) Penalise both sides of a target: only "paws too wide" cost, so the DC pulled its legs in to the stop.
+19. (v12) Walking rules in the sprint and full penalties on an unlearned sprint zeroed the reward; the brain forgot
+    to walk. Scope rules to their gait, keep practising walks, ramp the new skill's penalties.
+20. (v12) The arms could not reach the ground and the hand's joint sat in the wrong place – check geometry first.
 12. (v5) Style changes shift the body dynamics: longer, slower strides made the DC trunk rock until a steady-trunk
     term was added - and even then it did not reach v4's calm. Measure steadiness alongside every style change.
 13. (v9) Check what standing still earns under every command type AND with exploration noise: noise penalised as jerk

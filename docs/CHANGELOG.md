@@ -5,6 +5,23 @@ All changes and owner decisions, newest first. Commit hashes refer to branch `rl
 [predator_training_log.md](predator_training_log.md), [experiments.csv](experiments.csv),
 time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
+## 14 Oct 2026
+
+**DC walking v12: detailed body, wolf rules, T-rex arms, new hand, four-legged sprint** (owner: "meshes extremely
+detailed, as close as possible to the real model", wolf walk cycle as reference, "arms like a T-rex", "more weight on
+the back legs and tail, less in the head", "remodel the joint of the hand", "forget the arms for sprinting")
+- `sim/hulls_detailed.py` + `blender/scripts/export_sculpt_parts.py`: CoACD decomposition of the full sculpt, 218
+  pieces, spikes at 1/3 density (`2355814`); `sim/bodies.py`: `detailed=True`, `DC_DETAIL_MASS`, `DC_DETAIL_SPRINGREF`,
+  `_DC_ARM_LEFT_V12` + palm pad, arm / front-leg collision (`5822db7`, `16a0f8f`, `1c7e7e9`).
+- `sim/locomotion_env.py` version 12: wolf rules (walk only), neck rest pose, joint-limit margin, narrow-track cost,
+  T-rex arm pose with limited arm range, paw / palm flat costs, sprint pose, soft wrist + palm reflex, crouch cost,
+  braking drills, walk share, sprint penalty ramp; `gaits.ARMS_SPRINT` – the arms finally never join (`5578ab6`).
+- `train_locomotion.py`: `--max-command-end`, `--sprint-penalty`; `watch_locomotion.py`: `--version`, `--arm-run`.
+- `sim/arm_brain.py`, `train_arm_brain.py`: separate arm brain (experiment, stopped when the arms left the sprint).
+- `blender/scripts/rig_dc.py`: `remodel_hands` (forearm / hand bones and weights for the new hand); the showcase blend
+  was saved with it.
+- `docs/presentation/Endemic_Creatures_RL.pptx` updated (new section on DC v12).
+
 ## 13 Oct 2026
 
 **Mesh bodies, new reward, Myrranox v10 released, DC v11 started** (owner: "walk like their animals", "more realistic
