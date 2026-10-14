@@ -185,6 +185,8 @@ PLANK_SAG = 0.12             # version 12: trunk more than this below the standi
 WALK_SHARE = 0.5             # version 12: half of the moving commands stay walks (<= WOLF_WALK_MAX) whatever the sprint
                              # limit - with mostly sprint commands the DC forgot to walk and stood crouched (14 Oct)
 SPRINT_PENALTY_FROM, SPRINT_PENALTY_FULL = 1.2, 2.5   # m/s: the quality costs blend to self.sprint_penalty between these
+WALK_HELP_SLOW_MAX = 0.8     # version 12: the start-up help only pays at slow commands - without it the DC stood still at
+                             # 0.6 m/s, at full strength on every command it lurched forward in short hurried steps (14 Oct)
 BRAKE_DRILL = 0.5            # version 12: after a command above 1.5 m/s, half the next commands are a walk (braking)
 # version 12 hands on the ground (owner, 14 Oct: "it runs on the toes" -> all of: soft wrist, palm reflex, palm rule,
 # arm brain): while a hand touches the ground its wrist motor goes soft (WRIST_SOFT_KP instead of the body's kp, the
@@ -713,7 +715,8 @@ class LocomotionEnv(gym.Env):
             likeness = float(np.mean(likeness))
             # moving like the animal counts: a creature on speed but in the wrong rhythm keeps 20 % (was 40 %)
             reward = tracking * (0.2 + 0.8 * likeness) * quality
-            if self.walk_help > 0 and abs(self.command[0]) > 0.1:
+            help_cap = WALK_HELP_SLOW_MAX if self.version >= 12 else np.inf
+            if self.walk_help > 0 and 0.1 < abs(self.command[0]) <= help_cap:
                 # start-up help (owner, 13 Oct: "help the Myrranox a little bit for walking"): every bit of progress in
                 # the commanded direction pays, whatever the tempo or style; standing still never earns it. Faded out.
                 progress = float(np.clip(lin[0] * np.sign(self.command[0]) / abs(self.command[0]), 0.0, 1.0))

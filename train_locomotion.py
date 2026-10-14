@@ -42,14 +42,14 @@ class TrackingCurriculum(BaseCallback):
 class WalkHelp(BaseCallback):
     """Start-up help: the forward-progress bonus (LocomotionEnv.set_walk_help) fades from 1 to 0 over `steps`."""
 
-    def __init__(self, steps):
+    def __init__(self, steps, level=1.0, floor=0.0):
         super().__init__()
-        self.steps, self.t0 = steps, None
+        self.steps, self.level, self.floor, self.t0 = steps, level, floor, None
 
     def _on_rollout_start(self):
         if self.t0 is None:
             self.t0 = self.num_timesteps
-        scale = max(0.0, 1.0 - (self.num_timesteps - self.t0) / self.steps)
+        scale = max(self.floor, self.level * (1.0 - (self.num_timesteps - self.t0) / self.steps))
         self.training_env.env_method("set_walk_help", scale)
         self.logger.record("train/walk_help", scale)
 
@@ -158,6 +158,8 @@ def main():
                         "ones would make the new rewards look like noise - 13 Oct, v9 stage 1)")
     p.add_argument("--walk-help", type=float, default=None,
                    help="start-up help: forward-progress bonus faded out over this many steps")
+    p.add_argument("--walk-help-level", type=float, default=1.0, help="start strength of the start-up help")
+    p.add_argument("--walk-help-floor", type=float, default=0.0, help="the start-up help never fades below this")
     p.add_argument("--max-command", type=float, default=None,
                    help="training stage: commanded speeds up to this (walk first, then trot, run, sprint)")
     p.add_argument("--max-command-end", type=float, default=None,
@@ -223,7 +225,7 @@ def main():
     if args.version >= 4:
         callbacks.append(TrackingCurriculum(int(args.steps), end=args.track_end, start=args.track_start))
     if args.walk_help:
-        callbacks.append(WalkHelp(int(args.walk_help)))
+        callbacks.append(WalkHelp(int(args.walk_help), args.walk_help_level, args.walk_help_floor))
     if args.sprint_penalty is not None:
         callbacks.append(SprintPenaltyRamp(int(args.steps), args.sprint_penalty))
     if args.max_command_end:
