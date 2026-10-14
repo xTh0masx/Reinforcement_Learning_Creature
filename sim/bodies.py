@@ -336,11 +336,19 @@ for _side in "LR":
     for _limb, _share in (("hind", 0.075), ("front", 0.06), ("arm", 0.03)):
         for _i, _f in enumerate(_LIMB):
             DC_LEAN_MASS[f"{_limb}_{_side}_s{_i}"] = _share * _f
+# DC walking v12 (owner, 14 Oct: "more weight to the back legs and tail so it does not fall down, less weight in the
+# head"): the v12 brain fell forward (22 deg nose down) at speed with 55 % of the weight on the front legs.
+DC_DETAIL_MASS = dict(DC_LEAN_MASS, torso=0.29, neck=0.04, head=0.025, tail_1=0.035, tail_2=0.02)
+for _side in "LR":
+    for _i, _f in enumerate(_LIMB):
+        DC_DETAIL_MASS[f"hind_{_side}_s{_i}"] = 0.09 * _f
 PAW_PAD_RADIUS = 0.035      # m: rounded pad along the paw sole (contact geometry instead of the claw hull)
 
 
 def hull_mass(spec, bone):
     """Mass of a hull part: the creature's mass shared by volume x relative density (DC v11: fixed share)."""
+    if getattr(spec, "detailed", False):
+        return spec.mass * DC_DETAIL_MASS[bone]
     if getattr(spec, "lean", False):
         return spec.mass * DC_LEAN_MASS[bone]
     dens = HULL_DENSITY.get(spec.name, {})
@@ -427,8 +435,8 @@ DC_SPRINGREF = {"spine_px": -1.89, "tail_p0x": 16.85, "tail_p1x": 12.91, "neck_p
 DC_LEAN_SPRINGREF = {"spine_px": -2.72, "tail_p0x": 14.33, "tail_p1x": 10.61, "neck_p0x": -5.72, "neck_p1x": -6.5, "arm_L_p0x": -9.19}      # recalibrated below
 # walking v12 detailed body (218 pieces, light spikes): calibrate_springref("dc", active=True, arms=True, hulls=True,
 # lean=True, detailed=True), 3 passes, 13 Oct 2026
-DC_DETAIL_SPRINGREF = {"spine_px": -2.95, "tail_p0x": 14.82, "tail_p1x": 11.17, "neck_p0x": -5.84, "neck_p1x": -6.14,
-                       "arm_L_p0x": -9.19}
+DC_DETAIL_SPRINGREF = {"spine_px": -2.77, "tail_p0x": 15.39, "tail_p1x": 11.14, "neck_p0x": -5.55, "neck_p1x": -6.16,
+                       "arm_L_p0x": -9.19}   # 14 Oct: recalibrated for DC_DETAIL_MASS (lighter head, heavier tail)
 # 14 Oct (night): the wolf carries its head low; with the head held up by the neck spring the brain pressed the neck
 # command against its limit (+1.06) and still only reached 9 deg (head 0.82 m, wolf target 0.75 m). The neck's rest
 # angle is lowered by WOLF_NECK_DEG (spring and neutral command), so the low head is the relaxed pose.
