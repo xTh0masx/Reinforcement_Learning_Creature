@@ -32,6 +32,10 @@ DECIMATE_FACES = 10000      # triangles per bone fed to CoACD (30000: > 45 min w
 CACHE = HERE / "_coacd_cache"  # one file per finished bone, so an interrupted build resumes
 
 
+# walking v12 hand (sim/bodies._DC_ARM_LEFT_V12): faces of the hand bone above this height are the forearm's curve
+HAND_REASSIGN = {"dc": [("arm_L_s2", "arm_L_s1", 0.25)]}
+
+
 def bone_meshes(species="dc"):
     d = np.load(HERE / f"{species}_sculpt_mesh.npz")
     V, F, L, names = d["vertices"].astype(float), d["faces"], d["labels"], [str(b) for b in d["bones"]]
@@ -41,6 +45,9 @@ def bone_meshes(species="dc"):
     for src, dst, x, side in REASSIGN[species]:
         move = (face_bone == names.index(src)) & ((cx < x) if side == "behind" else (cx >= x))
         face_bone[move] = names.index(dst)
+    for src, dst, z in HAND_REASSIGN.get(species, []):     # v12 hand: the wrist's curve belongs to the forearm
+        cz = V[F].mean(1)[:, 2]
+        face_bone[(face_bone == names.index(src)) & (cz > z)] = names.index(dst)
     out = {}
     for i, bone in enumerate(names):
         if "_R_s" in bone:

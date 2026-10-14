@@ -65,6 +65,7 @@ def rig(repo_root):
     existing = bpy.data.objects.get(RIG)
     if existing is not None:
         add_arm_limbs(existing, spec, bpy.data.objects[PROXY])
+        remodel_hands(existing, bpy.data.objects[PROXY])
         store_joint_metadata(existing, spec)
         add_passive_bones(existing, spec)          # tail/neck/head/arm bones exist already; adds their joints
         if add_spine(existing, spec):              # new spine bone -> re-weight the proxy so the back can bend
@@ -159,6 +160,59 @@ def add_arm_limbs(arm, spec, proxy):
     for m in proxy.modifiers:
         if m.type == "ARMATURE":
             m.use_deform_preserve_volume = True       # no shrinking / rubber look where limbs bend
+    arm.data.pose_position = pose_position
+    return True
+
+
+def remodel_hands(arm, proxy):
+    """Walking v12 hand (sim/bodies._DC_ARM_LEFT_V12, owner 14 Oct): wrist at the bottom of the forearm's curve, hand
+    bone from the wrist back to the fingertips. Moves the forearm / hand bones and re-splits the forearm + hand weights
+    by distance to the new segments; the claws stay on the hand. Returns True if the rig was changed."""
+    import numpy as np
+    from mathutils import Vector
+    from sim.bodies import _DC_ARM_LEFT_V12, _mirror
+    sides = {"L": np.array(_DC_ARM_LEFT_V12), "R": np.array(_mirror(_DC_ARM_LEFT_V12))}
+    if "arm_L_s2" not in arm.data.bones:
+        return False
+    M = arm.matrix_world
+    if (M @ arm.data.bones["arm_L_s2"].head_local - Vector(sides["L"][2])).length < 1e-3:
+        return False
+    pose_position = arm.data.pose_position
+    arm.data.pose_position = "REST"
+    bpy.context.view_layer.update()
+    claws = {k: bpy.data.objects.get(f"FrontClaws_{k}") for k in sides}
+    claw_mw = {k: o.matrix_world.copy() for k, o in claws.items() if o is not None}
+    for o in bpy.context.selected_objects:
+        o.select_set(False)
+    bpy.context.view_layer.objects.active = arm
+    arm.select_set(True)
+    Minv = M.inverted()
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = arm.data.edit_bones
+    for k, p in sides.items():
+        eb[f"arm_{k}_s1"].tail = Minv @ Vector(p[2])
+        eb[f"arm_{k}_s2"].head = Minv @ Vector(p[2])
+        eb[f"arm_{k}_s2"].tail = Minv @ Vector(p[3])
+    bpy.ops.object.mode_set(mode="OBJECT")
+    Mp = proxy.matrix_world
+    for k, p in sides.items():
+        g1, g2 = proxy.vertex_groups[f"arm_{k}_s1"], proxy.vertex_groups[f"arm_{k}_s2"]
+        a, b = p[1:3], p[2:4]
+        for v in proxy.data.vertices:
+            w = {g.group: g.weight for g in v.groups}
+            total = w.get(g1.index, 0.0) + w.get(g2.index, 0.0)
+            if total <= 0:
+                continue
+            q = np.array(Mp @ v.co)
+            t = np.clip(np.einsum("ij,ij->i", q - a, b - a) / np.einsum("ij,ij->i", b - a, b - a), 0, 1)
+            dist = np.linalg.norm(q - (a + t[:, None] * (b - a)), axis=1)
+            share = np.exp(-((dist - dist.min()) / 0.03) ** 2)
+            share /= share.sum()
+            g1.add([v.index], float(total * share[0]), "REPLACE")
+            g2.add([v.index], float(total * share[1]), "REPLACE")
+        if k in claw_mw:
+            bpy.context.view_layer.update()
+            claws[k].matrix_world = claw_mw[k]
     arm.data.pose_position = pose_position
     return True
 

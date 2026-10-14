@@ -225,6 +225,13 @@ _DC_LEFT = {
 # DC walking v6 ("six-limbed panther"): the extra arms as real limbs - points traced along the DC mesh arm
 # (shoulder, elbow, wrist, claw tip), measured on DC_body_proxy on 30 Sep 2026
 _DC_ARM_LEFT = [(0.62, 0.20, 0.61), (0.79, 0.19, 0.44), (1.02, 0.20, 0.32), (1.04, 0.20, 0.17)]
+# Walking v12 hand (owner, 14 Oct: "remodel the joint of the hand"): in the real model the forearm curves down and the
+# hand hangs folded back under the wrist like a hook (palm on the inside, claws pointing back). The v6 points put the
+# wrist 10 cm too high (in the forearm's curve) and the "hand" was that vertical curve; the real hand was a rigid hook
+# on its end, so it could never open. Now: wrist at the bottom of the curve, hand from the wrist back to the
+# fingertips; the wrist opens up to 200 deg forward-down, so the palm can face the ground (measured on the sculpt).
+_DC_ARM_LEFT_V12 = [(0.62, 0.20, 0.61), (0.79, 0.19, 0.44), (1.06, 0.20, 0.22), (0.88, 0.20, 0.20)]
+DC_WRIST_RANGE_V12 = (-200, 30)                 # deg; negative opens the hand (fingers swing down and forward)
 DC_LEG_RADII = {"hind": (0.075, 0.05, 0.04), "front": (0.07, 0.05, 0.04), "arm": (0.055, 0.045, 0.04)}
 
 
@@ -256,11 +263,13 @@ def dc(passive=False, active=False, arms=False, hulls=False, lean=False, detaile
                             seg_radius=DC_LEG_RADII[pair] if arms else None))
     if arms:
         for side, sgn in (("L", 1), ("R", -1)):
-            p = np.array(_DC_ARM_LEFT) if sgn > 0 else _mirror(_DC_ARM_LEFT)
+            pts = _DC_ARM_LEFT_V12 if detailed else _DC_ARM_LEFT
+            p = np.array(pts) if sgn > 0 else _mirror(pts)
             abd = np.array([1.0, 0, 0]) * sgn
             pitch = np.array([0, 1.0, 0])
+            wrist = DC_WRIST_RANGE_V12 if detailed else (-90, 90)
             legs.append(Leg(f"arm_{side}", p, [(0, abd, (-15, 15)), (0, pitch, (-100, 80)),
-                                               (1, pitch, (-110, 110)), (2, pitch, (-90, 90))], 0.04,
+                                               (1, pitch, (-110, 110)), (2, pitch, wrist)], 0.04,
                             seg_radius=DC_LEG_RADII["arm"], mass_scale=0.5,
                             # mesh body: +-103 deg - folding the arms needs elbow 93 / wrist 66 deg (13 Oct)
                             action_scale=1.8 if hulls else 1.0))
@@ -423,6 +432,12 @@ def _paw_pad(spec, leg):
     p = np.asarray(leg.points, float)
     a = p[2] + 0.35 * (p[3] - p[2]) - p[2]
     b = p[3] - p[2]
+    if getattr(spec, "detailed", False) and leg.name.startswith("arm"):
+        # v12 hand: the pad lies on the palm - the inside of the hook, on top while the hand is folded back - and
+        # faces the ground once the wrist opens; the contact point is the middle of the palm
+        lift = np.array([0.0, 0.0, PAW_PAD_RADIUS - 0.025])
+        a, b = a + lift, b + lift
+        return a, b, 0.5 * (a + b) + [0, 0, PAW_PAD_RADIUS]
     low = spec.hulls[f"{leg.name}_s2"]["min"][2] - p[2][2]
     dz = (low + PAW_PAD_RADIUS) - min(a[2], b[2])
     a, b = a + [0, 0, dz], b + [0, 0, dz]
