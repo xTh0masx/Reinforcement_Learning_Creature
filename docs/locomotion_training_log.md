@@ -54,7 +54,11 @@ speed/turn commands every 2–5 s, 15 % standing), PPO with 8 parallel environme
 | 29 | 14 Oct 2026 | `dc_legs_v12p`, `v12q` | DC | 15.3M → 16.0M | palm rule, soft wrist + palm reflex, crouch cost | DC reared up in the sprint; v12q unlearned walking (0 m/s at walking commands). |
 | 30 | 14 Oct 2026 | `dc_legs_v12r` | DC | 14.0M → 14.3M | half the commands walks, sprint costs ramped | Stopped for the arm brain. |
 | 31 | 14 Oct 2026 | `dc_arms_v1` | DC arms | 70k (stopped) | separate arm brain, walking brain frozen | Laptop asleep 1.4 h; stopped when the owner dropped the arms from the sprint. |
-| 32 | 14 Oct 2026 | `dc_legs_v12u` | DC | 14.0M → 18.0M | T-rex arms at every speed, four-legged sprint (limit 1.2 → 4.0) | **running**; start: 0.63 / 0.82 m/s walking, 1.55 / 1.76 m/s at 2.5 / 4.0, no falls. |
+| 32 | 14 Oct 2026 | `dc_legs_v12u`, `v12v` | DC | 14.0M → 14.5M | T-rex arms at every speed, four-legged sprint; posture cost (capped) | Lay in a "plank" (16–18 cm low, legs stretched) when standing / walking slowly. |
+| 33 | 14 Oct 2026 | `dc_legs_v12w` | DC | 14.0M → 15.5M | plank = fall, posture cost uncapped | Plank gone, sprint 2.2 m/s, but no walking off at 0.3 / 0.6 m/s. |
+| 34 | 14 Oct 2026 | `dc_legs_v12x` | DC | 15.5M → 18.0M | start-up help (all speeds, fading) | Walks again at every command, sprint 2.8 m/s – but clunky: 37 % timing variation, 0.28 m strides, 6 cm bob. |
+| 35 | 14 Oct 2026 | `dc_legs_v12y` | DC | 18.0M → 18.8M | smoothing: 70 % walks, bounce / surge up, rhythm double, no help | Smoother at 1.0 m/s (bob 1.6 cm), but stood still at 0.6 again. |
+| 36 | 14 Oct 2026 | `dc_legs_v12z` | DC | 18.8M → 20.8M | gentle permanent start-up help at slow commands only | **Best DC so far:** 0.59 / 0.86 / 1.84 / 3.56 m/s, timing variation 1–9 %, strides 0.52–0.97 m, bob ≤ 2 cm, brakes from 4 m/s without falling. |
 
 Reward values are **not comparable between sessions** — the reward definition changed each time.
 Compare sessions by the evaluation metrics (`metrics.csv`: speed/turn tracking error, falls, foot slip).

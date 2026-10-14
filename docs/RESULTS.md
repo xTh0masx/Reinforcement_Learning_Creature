@@ -372,10 +372,21 @@ lifted at most 8 cm, the front wrist folds under in the swing, head carried low 
   (−61°) because the DC reared up (nose 11° up, shoulders 0.69 instead of 0.48 m). **Owner decision: no arms in the
   sprint** – T-rex arms at every speed, the DC sprints on four legs.
 
-**Training.** Many short stages (training log rows 23–32); the lessons are in section 8. Current brain (start of run
-`dc_legs_v12u`, T-rex arms, four-legged sprint): 0.63 / 0.82 m/s at the 0.6 / 1.0 m/s commands, 1.55 / 1.76 m/s at
-the 2.5 / 4.0 m/s commands, trunk level (≤ 3°), no falls. The sprint stage (limit 1.2 → 4.0 m/s, braking drills,
-half the commands still walks, sprint costs ramped from 35 % to full) is running.
+**Training.** Many short stages (training log rows 23–36); the lessons are in section 8. After the sprint stage the
+DC lay down in a "plank" (trunk 16–18 cm low, legs stretched) when standing or walking slowly → the plank counts as a
+fall, posture cost. Then the walk looked "clunky" (owner): short hurried steps, 6 cm bob → smoothing stage (70 %
+walks, bounce and surge costs up, step rhythm double, gentle start-up help only at slow commands).
+
+**Result `models/dc_legs_v12z` (20.8M steps, 14 Oct):**
+
+| | 0.6 m/s command | 1.0 m/s | 2.5 m/s | 4.0 m/s |
+| --- | --- | --- | --- | --- |
+| Speed | 0.59 ± 0.14 | 0.86 ± 0.17 | 1.84 | 3.56 (peak 4.1–4.2) |
+| Steps/s · timing variation | 1.12 · 9 % | 1.07 · 1 % | 1.89 · 2 % | – |
+| Stride · trunk bob | 0.52 m · 1.8 cm | 0.81 m · 2.0 cm | 0.97 m · 1.7 cm | – |
+
+Braking from the sprint to a walk: 3 of 3 without a fall; walking turns +31 / −28 °/s (command ±36); standing at the
+normal height (4 cm); no falls in any test. Weak: turning on the spot creeps forward (0.5 m/s) at 33 °/s (command 57).
 
 Figures: `figures/dc_physics_body_v11_vs_v12.jpg`, `figures/wolf_reference_frames.png`,
 `figures/dc_arms_folded_vs_trex.png`, `figures/dc_trex_arms_walk.png`, `figures/dc_hand_real_model_closeup.png`,

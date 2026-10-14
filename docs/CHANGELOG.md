@@ -5,6 +5,17 @@ All changes and owner decisions, newest first. Commit hashes refer to branch `rl
 [predator_training_log.md](predator_training_log.md), [experiments.csv](experiments.csv),
 time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
+## 14 Oct 2026 (evening)
+
+**DC v12: plank fixed, smoothing stage → `models/dc_legs_v12z`** (owner: "why does it make a plank position", "clunky
+rather than fluid")
+- Plank (trunk > 12 cm below the standing height) counts as a fall; posture cost (sag, paws far from the standing pose
+  when standing), linear and uncapped (`73f4db0`, `b4bd650`).
+- Smoothness: bounce 5.0, surge 0.6, step rhythm double in the likeness; `--walk-share`; start-up help only at slow
+  commands, gentle and permanent (`--walk-help-level`, `--walk-help-floor`) (`b773f41`, `c381900`).
+- Result: fluid walk (0.59 m/s at 0.6, timing variation 9 %, strides 0.52 m), sprint 3.6–4.2 m/s, braking without falls.
+- Everything pushed to GitHub (branch `rl-locomotion-setup`, tags).
+
 ## 14 Oct 2026
 
 **DC walking v12: detailed body, wolf rules, T-rex arms, new hand, four-legged sprint** (owner: "meshes extremely

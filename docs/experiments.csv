@@ -41,3 +41,6 @@ dc_legs_v12h,2026-10-14,1c7e7e9,dc,15259552,-,stage,new hand; hands on fingertip
 dc_legs_v12q,2026-10-14,1a4a7e7,dc,16009552,-,failed,palm/crouch rules at full sprint costs: unlearned walking (0 m/s)
 dc_arms_v1,2026-10-14,57cff1f,dc,70000,-,stopped,arm brain experiment; arms dropped from the sprint (owner)
 dc_legs_v12u,2026-10-14,5578ab6,dc,-,-,running,T-rex arms at every speed; four-legged sprint 1.2->4.0; start 0.63/0.82 walk; 1.55/1.76 at 2.5/4.0
+dc_legs_v12w,2026-10-14,b4bd650,dc,15509552,-,stage,plank = fall: plank gone; sprint 2.2 m/s; no slow walking
+dc_legs_v12x,2026-10-14,b4bd650,dc,18012208,-,stage,start-up help: walks at all commands; sprint 2.8 m/s; clunky (37 % timing variation; 6 cm bob)
+dc_legs_v12z,2026-10-14,c381900,dc,20765152,-,best DC (candidate walker),0.59/0.86/1.84/3.56 m/s; timing variation 1-9 %; strides 0.52-0.97 m; bob <=2 cm; brakes from 4 m/s without falling
