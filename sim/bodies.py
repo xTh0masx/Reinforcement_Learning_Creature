@@ -356,6 +356,19 @@ def hull_mass(spec, bone):
     return spec.mass * weighted[bone] / sum(weighted.values())
 
 
+# v12 (owner, 14 Oct: "the arm should not get in the way of the front legs"): body parts do not collide with each other
+# (class creature: contype 2 / conaffinity 1), so arm and front leg passed through each other. The arm's forearm and
+# hand (conaffinity +4) now collide with the front legs (contype +4); everything else as before.
+def _arm_front_collision(spec, bone):
+    if not getattr(spec, "detailed", False):
+        return ""
+    if bone.startswith("arm_") and not bone.endswith("_s0"):
+        return ' contype="2" conaffinity="5"'
+    if bone.startswith("front_"):
+        return ' contype="6" conaffinity="1"'
+    return ""
+
+
 def _hull_geom(spec, bone, origin, name=None, prefix_mesh=True):
     """Mesh geom for a hull: vertices relative to the body origin, mass by volume x density share of the body."""
     mass = hull_mass(spec, bone)
@@ -363,7 +376,8 @@ def _hull_geom(spec, bone, origin, name=None, prefix_mesh=True):
     pieces = spec.hulls[bone].get("pieces") if getattr(spec, "detailed", False) else None
     if pieces:                                  # v12: several pieces, the bone's mass split by piece volume
         mv = [p.get("mass_volume", p["volume"]) for p in pieces]          # spikes / horns at 1/3 density
-        nocoll = ' contype="0" conaffinity="0"' if bone.endswith("_s2") else ""   # paws: the pads touch the ground
+        nocoll = (' contype="0" conaffinity="0"' if bone.endswith("_s2")          # paws: the pads touch the ground
+                  else _arm_front_collision(spec, bone))
         return "".join(f'<geom{gname if k == 0 else ""} type="mesh" mesh="@MESH@hull_{bone}_{k}" '
                        f'mass="{mass * mv[k] / sum(mv):.5f}" class="creature"{nocoll}/>'
                        for k, p in enumerate(pieces))
@@ -537,7 +551,8 @@ def _leg_xml(leg, leg_mass, damp, offset=(0.0, 0.0, 0.0), spec=None):
             a, b, _ = _paw_pad(spec, leg)
             pad_mass = 0.001 if spec.detailed else hull_mass(spec, f"{leg.name}_s2")
             geom = (f'<geom name="{leg.name}_foot" type="capsule" fromto="{_fmt(a)} {_fmt(b)}" size="{PAW_PAD_RADIUS}" '
-                    f'mass="{pad_mass:.4f}" friction="1.2 0.02 0.001" class="creature"/>')
+                    f'mass="{pad_mass:.4f}" friction="1.2 0.02 0.001" class="creature"'
+                    f'{_arm_front_collision(spec, f"{leg.name}_s2")}/>')
             if spec.detailed:                   # v12: the paw's real shape (no contact) carries its mass
                 geom += _hull_geom(spec, f"{leg.name}_s2", origin)
         elif spec is not None and spec.hulls:

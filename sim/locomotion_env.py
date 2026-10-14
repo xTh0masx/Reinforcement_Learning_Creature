@@ -106,8 +106,10 @@ TASK_TERMS = ("lin", "ang", "gait", "clearance", "air_time", "style", "register"
 ARM_TUCK = (0.80, 0.20, 0.42)   # version 6: folded claw position in the torso frame (y mirrored per side)
 # version 12 (owner, 14 Oct: "the arms are tucked in - position them like a T-rex, and use them to balance"): upper arm
 # hanging slightly back, elbow bent ~90 deg, forearm forward, hands in front of the chest and clear of the ground
-ARM_TREX_CLAW = (0.98, 0.24, 0.42)
-ARM_TREX_ELBOW = (0.62, 0.24, 0.40)
+# 14 Oct (2), owner: "the arm should not get in the way of the front legs" - the hanging upper arm put the elbow (0.37 m
+# high) right in the front leg's swing path; now the upper arm points forward and the hands sit above the swing
+ARM_TREX_CLAW = (1.06, 0.22, 0.50)
+ARM_TREX_ELBOW = (0.80, 0.25, 0.50)
 ARM_TREX_TOL = 0.20          # m: arms may swing this far around the pose (balancing) and still score well
 ANKLE_FOLD = 0.3                # version 6: ankle / wrist fold in mid-swing (rad); flat (no rhythm) in stance
 # version 9: natural standing pose = the neutral position the brain's commands work around (13 Oct: on the mesh bodies
