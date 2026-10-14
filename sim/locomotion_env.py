@@ -159,7 +159,11 @@ V9_QUALITY = dict(
 # the swing, back level, head low and forward. Added to the likeness (0..1 scores) and the quality costs.
 V12_QUALITY = dict(V9_QUALITY,
     support=1.0,        # walking with fewer than two paws on the ground (a wolf's walk never leaves the ground)
+    paw_flat=0.5,       # per touchdown with the paw sole tilted more than PAW_FLAT_DEG (owner: "the paws need to land
+                        # normally when sprinting" - not on the claw tips or the side of the paw; arms too)
     high_step=0.5)      # swing paw higher than WOLF_LIFT ((excess / 5 cm)^2)
+BRAKE_DRILL = 0.5            # version 12: after a command above 1.5 m/s, half the next commands are a walk (braking)
+PAW_FLAT_DEG = 20.0          # version 12: sole tilt (deg) allowed at touchdown; each 20 deg beyond costs 1 (squared)
 WOLF_LIFT = 0.08             # m: highest paw lift in the wolf's walk scaled to the DC (~12 % of leg height)
 WOLF_HEAD_DZ = 0.75          # m: head (neck_s1 origin) above the torso origin (which is at floor level for the DC);
                              # the DC holds it at 0.87 m - the wolf carries its head lower, about at its back's height
@@ -250,6 +254,12 @@ class LocomotionEnv(gym.Env):
         self.nlegs = len(self.leg_names)
         self.front_legs = np.array([n.startswith("front") for n in self.leg_names])      # version 12 (DC)
         self.arm_joint_mask = np.array([j.startswith("arm_") for j in self.body.joint_names])
+        self.pad_axes = np.zeros((self.nlegs, 3))                   # version 12: paw sole direction in the paw frame
+        if version >= 12 and self.front_legs.any():
+            from sim.bodies import _paw_pad
+            for i, leg in enumerate(self.body.legs):
+                a, b, _ = _paw_pad(self.body, leg)
+                self.pad_axes[i] = b - a
         self.hind_legs = np.array([n.startswith("hind") for n in self.leg_names])
         self.paw_bodies = np.array([nid(mujoco.mjtObj.mjOBJ_BODY, f"{n}_s2") for n in self.leg_names])             if self.front_legs.any() else np.zeros(0, int)
         self.foot_geoms = np.array([nid(mujoco.mjtObj.mjOBJ_GEOM, n) for n in self.body.foot_names])
@@ -381,6 +391,8 @@ class LocomotionEnv(gym.Env):
         else:
             top = min(self.top_speed, self.command_limit or self.top_speed)
             v = rng.uniform(-sp.max_backward_speed, sp.max_speed) if self.version == 1 else rng.uniform(0.1, top)
+            if self.version >= 12 and self.command_target[0] > 1.5 and rng.uniform() < BRAKE_DRILL:
+                v = rng.uniform(0.0, 0.8)                      # braking drill: from a run straight back to a walk
             w = rng.uniform(-sp.max_turn_rate, sp.max_turn_rate) * (rng.uniform() < (0.7 if self.version == 1 else 0.8))
             if not sp.turn_in_place and abs(v) < sp.min_turn_speed:
                 w *= abs(v) / sp.min_turn_speed
@@ -400,7 +412,8 @@ class LocomotionEnv(gym.Env):
     def gait_targets(self):
         """(per-leg phase in [0,1), desired stance mask, duty, frequency Hz, standing?) for the current command."""
         v, w = self.command
-        offsets, duty = gaits.pattern(self.species_name, self.leg_names, v)
+        offsets, duty = gaits.pattern(self.species_name, self.leg_names, v,
+                                      arms=gaits.ARMS_SPRINT if self.version >= 12 else (gaits.ARMS_FROM, gaits.ARMS_FULL))
         f = gaits.frequency(self.species_name, v, w, self.species.max_turn_rate, style=self.version >= 5,
                             sprint=self.version >= 8)
         standing = gaits.is_standing(v, w)
@@ -619,6 +632,7 @@ class LocomotionEnv(gym.Env):
                 swing_legs = self.is_leg & ~foot_contact
                 p["support"] = float(walking and np.sum(foot_contact & self.is_leg) < 2)
                 p["high_step"] = float(np.sum((np.maximum(lift[swing_legs] - WOLF_LIFT, 0.0) / 0.05) ** 2)) if walking else 0.0
+                p["paw_flat"] = self._paw_tilt_cost(touchdown)
             self.since_touchdown = np.where(touchdown, 0.0, self.since_touchdown)
             self.prev_vx_v9 = float(lin[0])
             qw = V12_QUALITY if self.version >= 12 else V9_QUALITY
@@ -900,6 +914,17 @@ class LocomotionEnv(gym.Env):
             dist = 0.5 * (dist + np.linalg.norm(elbow - self.elbow_target[idle], axis=1))
             return float(np.mean(np.exp(-(dist / ARM_TREX_TOL) ** 2)))
         return float(np.mean(np.exp(-(dist / 0.25) ** 2)))
+
+    def _paw_tilt_cost(self, touchdown):
+        """Version 12: sum over the paws touching down of ((sole tilt - PAW_FLAT_DEG) / 20 deg)^2; the sole is the
+        rounded pad's axis (paw middle -> tip)."""
+        cost = 0.0
+        for i in np.flatnonzero(touchdown):
+            R = self.data.xmat[self.paw_bodies[i]].reshape(3, 3)
+            ax = R @ self.pad_axes[i]
+            tilt = math.degrees(math.asin(min(abs(ax[2]) / (np.linalg.norm(ax) + 1e-9), 1.0)))
+            cost += (max(tilt - PAW_FLAT_DEG, 0.0) / 20.0) ** 2
+        return cost
 
     def _wolf(self, foot_pos, foot_contact, walking):
         """Version 12, DC: likeness scores (0..1) from the wolf reference - same step rate front and hind, front wrist
