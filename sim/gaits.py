@@ -19,8 +19,10 @@ DC_TROT = {"hind_L": 0.0, "front_L": 0.5, "hind_R": 0.5, "front_R": 1.0}   # fro
 # cycle after the trot pairs (mirror-compatible: arm_L 0.25 <-> arm_R 0.75), so something touches down every quarter.
 DC_ARMS = {"arm_L": 0.25, "arm_R": 0.75}
 ARMS_FROM, ARMS_FULL, ARM_DUTY = 1.4, 1.8, 0.35
-# DC walking v12 (owner, 14 Oct: "front arms only for sprinting, walking like a T-rex"): the arms join from 2.0 m/s
-ARMS_SPRINT = (2.0, 2.6)
+# DC walking v12 (owner, 14 Oct: "front arms only for sprinting, walking like a T-rex"): the arms joined from 2.0 m/s;
+# later the same day (owner: "forget the usage of the arms for sprinting") they never join - T-rex arms at every speed,
+# the DC sprints on four legs
+ARMS_SPRINT = (99.0, 100.0)
 
 GAITS = {
     # species: (min Hz, max Hz, reference speed for max Hz)
