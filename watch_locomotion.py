@@ -27,13 +27,21 @@ def main():
     p.add_argument("--poll", type=float, default=10.0, help="seconds between checks for a new checkpoint")
     p.add_argument("--version", type=int, default=None,
                    help="body / env version to show (a resumed run's first checkpoint still carries the old version)")
+    p.add_argument("--arm-run", default=None,
+                   help="DC: also show the newest checkpoint of this arm-brain run (sim/arm_brain.py) on the arms")
     args = p.parse_args()
+
+    def load(path):
+        if not args.arm_run or not checkpoints(args.arm_run):
+            return Brain(path, args.species)
+        from sim.arm_brain import CombinedBrain
+        return CombinedBrain(path, checkpoints(args.arm_run)[-1][1])
 
     print(f"waiting for the first checkpoint of {args.run} ...")
     while not checkpoints(args.run):
         time.sleep(args.poll)
     steps, loaded = checkpoints(args.run)[-1]
-    brain = Brain(loaded, args.species)
+    brain = load(loaded)
     env = LocomotionEnv(args.species, episode_seconds=1e9, version=args.version or brain.version)
     obs, _ = env.reset(seed=0, options={"command": (0.0, 0.0)})
     print(f"now showing {args.run} @ {fmt_steps(steps)}")
@@ -51,7 +59,7 @@ def main():
                 cks = checkpoints(args.run)
                 if cks and cks[-1][1] != loaded:
                     steps, loaded = cks[-1]
-                    brain = Brain(loaded, args.species)
+                    brain = load(loaded)
                     obs, _ = env.reset(seed=0, options={"command": (0.0, 0.0)})
                     seg, seg_left = 0, 0.0
                     print(f"now showing {args.run} @ {fmt_steps(steps)}")
