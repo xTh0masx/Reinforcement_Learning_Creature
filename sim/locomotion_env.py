@@ -104,6 +104,11 @@ WEIGHTS[6] = dict(WEIGHTS[5],
                   surge=-0.2)           # ((forward acceleration) / 2 m/s^2)^2: no speeding up and slowing down per stride
 TASK_TERMS = ("lin", "ang", "gait", "clearance", "air_time", "style", "register", "arm_tuck")
 ARM_TUCK = (0.80, 0.20, 0.42)   # version 6: folded claw position in the torso frame (y mirrored per side)
+# version 12 (owner, 14 Oct: "the arms are tucked in - position them like a T-rex, and use them to balance"): upper arm
+# hanging slightly back, elbow bent ~90 deg, forearm forward, hands in front of the chest and clear of the ground
+ARM_TREX_CLAW = (0.98, 0.24, 0.42)
+ARM_TREX_ELBOW = (0.62, 0.24, 0.40)
+ARM_TREX_TOL = 0.20          # m: arms may swing this far around the pose (balancing) and still score well
 ANKLE_FOLD = 0.3                # version 6: ankle / wrist fold in mid-swing (rad); flat (no rhythm) in stance
 # version 9: natural standing pose = the neutral position the brain's commands work around (13 Oct: on the mesh bodies
 # the brains pushed joints to their limits just to hold the right stance, leaving no range for walking)
@@ -709,8 +714,13 @@ class LocomotionEnv(gym.Env):
             self.ankle_dir = np.array(dirs)
             foot_body()
         self.arm_legs = np.array([n.startswith("arm") for n in self.leg_names])
-        self.tuck_target = np.array([[ARM_TUCK[0], ARM_TUCK[1] * np.sign(leg.points[0, 1]), ARM_TUCK[2]]
-                                     for leg in self.body.legs])
+        trex = self.version >= 12
+        claw = ARM_TREX_CLAW if trex else ARM_TUCK
+        self.tuck_target = np.array([[claw[0], claw[1] * np.sign(leg.points[0, 1]), claw[2]] for leg in self.body.legs])
+        self.elbow_target = np.array([[ARM_TREX_ELBOW[0], ARM_TREX_ELBOW[1] * np.sign(leg.points[0, 1]), ARM_TREX_ELBOW[2]]
+                                      for leg in self.body.legs])
+        self.elbow_bodies = np.array([mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, self.prefix + f"{n}_s1")
+                                      for n in self.leg_names])
         # folded arm pose (joint offsets) that brings the claws to the tuck target - small coordinate search
         self.tuck_pose = {}
         for i in np.flatnonzero(self.arm_legs):
@@ -720,7 +730,11 @@ class LocomotionEnv(gym.Env):
             def cost(qq):
                 for k, j in enumerate(idx):
                     d.qpos[self.joint_qpos[j]] = self.rest_joints[j] + qq[k]
-                return float(np.linalg.norm(foot_body()[i] - self.tuck_target[i]))
+                c = float(np.linalg.norm(foot_body()[i] - self.tuck_target[i]))
+                if trex:                                          # elbow placed too (T-rex arm, not a folded one)
+                    c += float(np.linalg.norm((d.xpos[self.elbow_bodies[i]] - d.xpos[self.torso_body]) @ R
+                                              - self.elbow_target[i]))
+                return c
             best = cost(q)
             for step in (0.4, 0.2, 0.1, 0.05, 0.02):
                 improved = True
@@ -879,6 +893,10 @@ class LocomotionEnv(gym.Env):
         R = self.data.xmat[self.torso_body].reshape(3, 3)
         rel = (foot_pos[idle] - self.data.xpos[self.torso_body]) @ R
         dist = np.linalg.norm(rel - self.tuck_target[idle], axis=1)
+        if self.version >= 12:                                    # T-rex arms: hands and elbows, loose tolerance
+            elbow = (self.data.xpos[self.elbow_bodies[idle]] - self.data.xpos[self.torso_body]) @ R
+            dist = 0.5 * (dist + np.linalg.norm(elbow - self.elbow_target[idle], axis=1))
+            return float(np.mean(np.exp(-(dist / ARM_TREX_TOL) ** 2)))
         return float(np.mean(np.exp(-(dist / 0.25) ** 2)))
 
     def _wolf(self, foot_pos, foot_contact, walking):
