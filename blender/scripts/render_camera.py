@@ -18,6 +18,8 @@ p.add_argument("--out", required=True)
 p.add_argument("--samples", type=int, default=16)
 p.add_argument("--size", type=int, nargs=2, default=(960, 540))
 p.add_argument("--frames", type=int, nargs=2, default=None, help="start end (default: scene range)")
+p.add_argument("--sharp-shadows", action="store_true",
+               help="hard shadow edges: about 20 %% faster on the laptop's integrated GPU (21 Oct)")
 args = p.parse_args(argv)
 
 scene = bpy.context.scene
@@ -28,6 +30,10 @@ r = scene.render
 r.resolution_x, r.resolution_y = args.size
 r.resolution_percentage = 100
 scene.eevee.taa_render_samples = args.samples
+if args.sharp_shadows:
+    for light in bpy.data.lights:
+        if hasattr(light, "use_soft_shadows"):
+            light.use_soft_shadows = False
 r.image_settings.file_format = "PNG"
 r.use_overwrite = False                          # resumable: skip frames that exist
 r.use_placeholder = True                         # lets two processes share work safely
