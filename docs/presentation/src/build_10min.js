@@ -131,7 +131,7 @@ tools.forEach(([t, d, col], i) => {
   T(s, t, { x: x + 0.95, y: y + 0.15, w: 4.8, h: 0.4, fontSize: 16, bold: true, color: C.text2 });
   T(s, d, { x: x + 0.95, y: y + 0.58, w: 4.8, h: 0.4, fontSize: 14 });
 });
-s.addNotes("ca. 1 min. Alles Open Source ausser dem Assistenten. Rechnen nur auf dem Laptop: ein Grund, warum Training und Rendern lange dauerten.");
+s.addNotes("ca. 50 s. Alles Open Source ausser dem Assistenten. Rechnen nur auf dem Laptop: ein Grund, warum Training und Rendern lange dauerten.");
 
 // ================================================================== 5 Algorithmus
 pres.addSection({ title: "Lernen" });
@@ -157,7 +157,7 @@ arch.forEach(([t, hz, d, col], i) => {
 s.addNotes("ca. 1 min 15 s. PPO einfach erklären. Zwei Gehirne übereinander: das obere entscheidet, das untere setzt es in Beinbewegung um. Belohnung beim Laufen: Tempo treffen × wie tierähnlich × wie sauber (Ruck, Kippen, Rutschen).");
 
 // ================================================================== 6 Ergebnis
-s = content("Was ist herausgekommen?", "Lernen");
+s = content("Was ist herausgekommen? Überblick und DC", "Lernen");
 const stats = [["12", "Versionen des\nLaufgehirns"], ["≈ 50", "trainierte\nGehirne"], ["218", "Physik-Teile im\nDC-Körper"]];
 stats.forEach(([big, label], i) => {
   const x = M + i * 2.1;
@@ -169,7 +169,24 @@ s.addImage({ path: FIG("dc_physics_body_v11_vs_v12.jpg"), x: M, y: 3.55, w: 6.1,
 table(s, [["", "Myrranox v10", "DC v12z"], ["Gehen", "0,52 m/s, Dreifuß", "0,59 m/s, flüssig"], ["Vollgas", "1,08 m/s", "bis 4,1 m/s Sprint"], ["Besonderes", "rückwärts, dreht am Ort", "bremst ohne Sturz"], ["Jagen (2D)", "4,0 Beute / 10 min", "4,6 Beute / 10 min"]],
   { x: 7.0, w: 5.7, y: 1.45, colW: [1.6, 2.05, 2.05] }, 14, 0.55);
 T(s, "Beide Läufer final, beide jagen im Habitat; ein 30-s-Showcase-Video zeigt sie zusammen.", { x: 7.0, y: 4.45, w: 5.7, h: 0.9, fontSize: 14, italic: true, color: C.text2 });
-s.addNotes("ca. 45 s. Kurz die Zahlen; Bild: alter Physik-Körper (Blöcke) gegen den neuen aus 218 Teilen.");
+s.addNotes("ca. 40 s. Kurz die Zahlen; Bild: alter DC-Physik-Körper (Blöcke) gegen den neuen aus 218 Teilen.");
+
+// ================================================================== 6b Ergebnis Myrranox
+s = content("Was ist herausgekommen? Myrranox", "Lernen");
+s.addImage({ path: LOCAL("myrranox_physics_body_mesh_deck.jpg"), x: M, y: 1.45, w: 5.6, h: 5.6 * 1240 / 1650, objectName: "myr_body" });
+T(s, "Physik-Körper aus dem echten Modell: 21 Hüllen, Krallen als Füße", { x: M, y: 5.75, w: 5.6, h: 0.4, fontSize: 13, italic: true, color: C.text2 });
+[["0,52 m/s", "Gehen\n(Befehl 0,6)"], ["1,08 m/s", "Vollgas\n(Befehl 1,2)"], ["56 °/s", "Drehen auf\nder Stelle"], ["−0,26 m/s", "rückwärts –\nerstmals gelernt"]].forEach(([big, label], i) => {
+  const x = 6.55 + (i % 4) * 1.55;
+  card(s, x, 1.45, 1.42, 1.75, `myr_stat${i}`);
+  T(s, big, { x: x + 0.05, y: 1.6, w: 1.32, h: 0.55, fontFace: "Cambria", fontSize: 19, bold: true, color: i % 2 ? C.accent1 : C.accent2, align: "center" });
+  T(s, label, { x: x + 0.05, y: 2.25, w: 1.32, h: 0.85, fontSize: 12, color: C.text2, align: "center" });
+});
+card(s, 6.55, 3.4, 6.15, 2.65, "myr_path");
+T(s, "Der Weg zum Insekten-Gang", { x: 6.8, y: 3.55, w: 5.7, h: 0.4, fontSize: 17, bold: true, color: C.text2 });
+s.addText(bullets(["v1: läuft, aber nur mit den Mittelbeinen", "v2: Dreifuß-Takt (3 Beine am Boden), 5× weniger Energie", "v5: Knie endlich frei (waren seit v2 blockiert)",
+  "v9: „Schubkarre“ – der Hinterleib war 54 % des Gewichts", "v10: Hinterleib leichter (23 %) + Dreifuß-Schrittgeber → final"], 14), { isTextBox: true, x: 6.8, y: 4.05, w: 5.75, h: 1.95, valign: "top", margin: 0 });
+T(s, "Dreifuß-Takt 87 % der Zeit · Knie 60° · Hinterleib nie am Boden · keine Stürze · offen: Vorderbeine nur 21 % am Boden", { x: M, y: 6.35, w: 12.1, h: 0.4, fontSize: 13, italic: true, color: C.accent3 });
+s.addNotes("ca. 45 s. Der Myrranox war schwieriger als gedacht: erst als das Gewicht stimmte (leichterer Hinterleib) und ein fester Dreifuß-Rhythmus vorgegeben wurde, lief er wie ein Insekt. Rückwärts und Drehen auf der Stelle hat er erst mit v10 gelernt.");
 
 // ================================================================== 7 Gelernt
 pres.addSection({ title: "Rückblick" });
