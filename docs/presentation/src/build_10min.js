@@ -154,7 +154,7 @@ arch.forEach(([t, hz, d, col], i) => {
   T(s, d, { x: 7.6, y: y + 0.65, w: 4.9, h: 0.75, fontSize: 14 });
   if (i < 2) s.addShape(pres.shapes.DOWN_ARROW, { x: 9.45, y: y + 1.47, w: 0.3, h: 0.26, fill: { color: "8FA89B" }, line: { color: "8FA89B" } });
 });
-s.addNotes("ca. 1 min 15 s. PPO einfach erklären. Zwei Gehirne übereinander: das obere entscheidet, das untere setzt es in Beinbewegung um. Belohnung beim Laufen: Tempo treffen × wie tierähnlich × wie sauber (Ruck, Kippen, Rutschen).");
+s.addNotes("ca. 1 min. PPO einfach erklären. Zwei Gehirne übereinander: das obere entscheidet, das untere setzt es in Beinbewegung um. Belohnung beim Laufen: Tempo treffen × wie tierähnlich × wie sauber (Ruck, Kippen, Rutschen).");
 
 // ================================================================== 6 Ergebnis DC
 s = content("Was ist herausgekommen? DC", "Lernen");
@@ -190,6 +190,13 @@ s.addText(bullets(["v1: läuft, aber nur mit den Mittelbeinen", "v2: Dreifuß-Ta
 T(s, "Dreifuß-Takt 87 % der Zeit · Knie 60° · Hinterleib nie am Boden · keine Stürze · offen: Vorderbeine nur 21 % am Boden", { x: M, y: 6.35, w: 12.1, h: 0.4, fontSize: 13, italic: true, color: C.accent3 });
 s.addNotes("ca. 45 s. Der Myrranox war schwieriger als gedacht: erst als das Gewicht stimmte (leichterer Hinterleib) und ein fester Dreifuß-Rhythmus vorgegeben wurde, lief er wie ein Insekt. Rückwärts und Drehen auf der Stelle hat er erst mit v10 gelernt.");
 
+// ================================================================== 6c Lernkurven
+s = content("Lernkurven aller Gehirn-Versionen", "Lernen");
+s.addImage({ path: FIG("locomotion/learning_curves_all_myrranox.png"), x: M, y: 1.35, w: 6.0, h: 6.0 * 1147 / 1440, objectName: "lc_myr" });
+s.addImage({ path: FIG("locomotion/learning_curves_all_dc.png"), x: 7.75, y: 1.3, w: 5.0, h: 5.0 * 1500 / 1440, objectName: "lc_dc" });
+T(s, "Jede Version mit eigener Skala: Die Belohnung wurde fast jedes Mal anders definiert (v1–v8 bis ≈ 3.000 je Episode, ab v9 multiplikativ 0–50). Steigende Kurven = das Gehirn lernt; Einbrüche = neue Regeln oder ein Schlupfloch.", { x: M, y: 6.25, w: 6.85, h: 0.7, fontSize: 12, italic: true, color: C.text2 });
+s.addNotes("ca. 45 s. Links alle Myrranox-, rechts alle DC-Versionen, je ein kleines Diagramm. Wichtig: die Werte sind zwischen Versionen nicht vergleichbar, nur der Verlauf. Gut zu sehen: v1-v3 lernen stetig; Einbrüche bei v4/v5 durch strengere Regeln; v9 die neue Belohnung; beim DC v12 viele kurze Stufen bis zum finalen Gehirn.");
+
 // ================================================================== 7 Gelernt
 pres.addSection({ title: "Rückblick" });
 s = content("Was habe ich gelernt?", "Rückblick");
@@ -206,7 +213,7 @@ learned.forEach(([t, d], i) => {
   T(s, t, { x: x + 1.0, y: y + 0.18, w: 4.7, h: 0.45, fontSize: 16, bold: true, color: C.text2 });
   T(s, d, { x: x + 1.0, y: y + 0.65, w: 4.7, h: 0.8, fontSize: 14 });
 });
-s.addNotes("ca. 1 min 15 s. Wichtigste Erkenntnis: RL optimiert genau das, was man belohnt - nicht das, was man meint. Beispiele nennen.");
+s.addNotes("ca. 1 min. Wichtigste Erkenntnis: RL optimiert genau das, was man belohnt - nicht das, was man meint. Beispiele nennen.");
 
 // ================================================================== 8 Schlecht gelaufen
 s = content("Was ist schlecht gelaufen?", "Rückblick");
@@ -217,7 +224,7 @@ table(s, [["Problem", "Was passierte"],
   ["Arme & Hand", "Arme zu kurz, Handgelenk an falscher Stelle – Arme im Sprint am Ende verworfen"],
   ["Rechner", "Laptop schlief ein oder Sitzung endete: ≈ 9 h Training verloren; Rendern 4–6 h pro Video"],
   ["Jagen", "Raubzüge und Revierverteidigung nie gelernt; Spiel-Idee gebaut und verworfen"]], { y: 1.45, colW: [2.9, 9.2] }, 17, 0.75);
-s.addNotes("ca. 1 min 15 s. Ehrlich: viele Runden waren Fehlversuche. Jede hat aber eine Lehre gebracht.");
+s.addNotes("ca. 1 min. Ehrlich: viele Runden waren Fehlversuche. Jede hat aber eine Lehre gebracht.");
 
 // ================================================================== 9 Anders machen
 s = content("Was würde ich anders machen?", "Rückblick");

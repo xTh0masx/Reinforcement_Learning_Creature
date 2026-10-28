@@ -430,6 +430,7 @@ real animation render (960 × 540, incl. rig, mesh deformation, HUD, PNG):
 | `videos/myr_legs_v2_training.mp4`, `videos/dc_legs_v2_training.mp4` | Same for v2 (natural gait) |
 | `videos/*_legs_v1_vs_v2.mp4` | v1 and v2 side by side on the same commands |
 | `figures/locomotion/learning_curves_<species>.png` | Reward curves of all walking runs incl. the failed pilots |
+| `figures/locomotion/learning_curves_all_<species>.png` | **All brain versions** (one panel per version, own scale; `make_learning_curves.py`) – used in the 10-minute presentation |
 | `figures/locomotion/<run>/progress.gif` | All checkpoints back to back (short) |
 | `figures/locomotion/<run>/contact_sheet.png` | One frame per checkpoint |
 | `figures/locomotion/<run>/metrics.png` / `.csv` | Speed / turn tracking, restart from standstill, falls per checkpoint |
