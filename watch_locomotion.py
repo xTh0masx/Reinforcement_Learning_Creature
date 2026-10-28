@@ -22,7 +22,8 @@ print = functools.partial(print, flush=True)
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--run", required=True)
+    p.add_argument("--run", default=None)
+    p.add_argument("--model", default=None, help="show this saved brain (e.g. models/dc_legs_v12z) instead of a run")
     p.add_argument("--species", required=True)
     p.add_argument("--poll", type=float, default=10.0, help="seconds between checks for a new checkpoint")
     p.add_argument("--version", type=int, default=None,
@@ -37,14 +38,17 @@ def main():
         from sim.arm_brain import CombinedBrain
         return CombinedBrain(path, checkpoints(args.arm_run)[-1][1])
 
-    print(f"waiting for the first checkpoint of {args.run} ...")
-    while not checkpoints(args.run):
-        time.sleep(args.poll)
-    steps, loaded = checkpoints(args.run)[-1]
+    if args.model:
+        steps, loaded = None, args.model
+    else:
+        print(f"waiting for the first checkpoint of {args.run} ...")
+        while not checkpoints(args.run):
+            time.sleep(args.poll)
+        steps, loaded = checkpoints(args.run)[-1]
     brain = load(loaded)
     env = LocomotionEnv(args.species, episode_seconds=1e9, version=args.version or brain.version)
     obs, _ = env.reset(seed=0, options={"command": (0.0, 0.0)})
-    print(f"now showing {args.run} @ {fmt_steps(steps)}")
+    print(f"now showing {loaded}" if args.model else f"now showing {args.run} @ {fmt_steps(steps)}")
     script = command_script(args.species)
     seg, seg_left, last_poll = 0, 0.0, time.time()
 
@@ -54,7 +58,7 @@ def main():
         viewer.cam.distance, viewer.cam.elevation, viewer.cam.azimuth = 3.0, -20, 135
         while viewer.is_running():
             now = time.time()
-            if now - last_poll > args.poll:
+            if args.run and not args.model and now - last_poll > args.poll:
                 last_poll = now
                 cks = checkpoints(args.run)
                 arm_now = checkpoints(args.arm_run)[-1][1] if args.arm_run and checkpoints(args.arm_run) else None
