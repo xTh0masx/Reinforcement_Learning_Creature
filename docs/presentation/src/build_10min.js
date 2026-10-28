@@ -156,20 +156,22 @@ arch.forEach(([t, hz, d, col], i) => {
 });
 s.addNotes("ca. 1 min 15 s. PPO einfach erklären. Zwei Gehirne übereinander: das obere entscheidet, das untere setzt es in Beinbewegung um. Belohnung beim Laufen: Tempo treffen × wie tierähnlich × wie sauber (Ruck, Kippen, Rutschen).");
 
-// ================================================================== 6 Ergebnis
-s = content("Was ist herausgekommen? Überblick und DC", "Lernen");
-const stats = [["12", "Versionen des\nLaufgehirns"], ["≈ 50", "trainierte\nGehirne"], ["218", "Physik-Teile im\nDC-Körper"]];
-stats.forEach(([big, label], i) => {
-  const x = M + i * 2.1;
-  card(s, x, 1.45, 1.95, 1.9, `stat${i}`);
-  T(s, big, { x: x + 0.15, y: 1.55, w: 1.7, h: 0.8, fontFace: "Cambria", fontSize: 34, bold: true, color: i % 2 ? C.accent2 : C.accent1, align: "center" });
-  T(s, label, { x: x + 0.1, y: 2.45, w: 1.75, h: 0.8, fontSize: 13, color: C.text2, align: "center" });
+// ================================================================== 6 Ergebnis DC
+s = content("Was ist herausgekommen? DC", "Lernen");
+s.addImage({ path: LOCAL("dc_physics_body_v12_deck.jpg"), x: M, y: 1.45, w: 5.6, h: 5.6 * 1200 / 1400, objectName: "dc_body" });
+T(s, "Physik-Körper aus dem Detail-Modell: 218 Teile, mit Stacheln", { x: M, y: 6.3, w: 5.6, h: 0.4, fontSize: 13, italic: true, color: C.text2 });
+[["0,59 m/s", "Gehen\n(Befehl 0,6)"], ["4,1 m/s", "Sprint-\nSpitze"], ["±1 %", "Takt-Schwankung\nbei 1 m/s"], ["3 von 3", "Bremsen aus dem\nSprint ohne Sturz"]].forEach(([big, label], i) => {
+  const x = 6.55 + (i % 4) * 1.55;
+  card(s, x, 1.45, 1.42, 1.75, `dc_stat${i}`);
+  T(s, big, { x: x + 0.05, y: 1.6, w: 1.32, h: 0.55, fontFace: "Cambria", fontSize: 19, bold: true, color: i % 2 ? C.accent1 : C.accent4, align: "center" });
+  T(s, label, { x: x + 0.05, y: 2.25, w: 1.32, h: 0.85, fontSize: 12, color: C.text2, align: "center" });
 });
-s.addImage({ path: FIG("dc_physics_body_v11_vs_v12.jpg"), x: M, y: 3.55, w: 6.1, h: 3.1, sizing: { type: "cover", w: 6.1, h: 3.1 }, objectName: "body" });
-table(s, [["", "Myrranox v10", "DC v12z"], ["Gehen", "0,52 m/s, Dreifuß", "0,59 m/s, flüssig"], ["Vollgas", "1,08 m/s", "bis 4,1 m/s Sprint"], ["Besonderes", "rückwärts, dreht am Ort", "bremst ohne Sturz"], ["Jagen (2D)", "4,0 Beute / 10 min", "4,6 Beute / 10 min"]],
-  { x: 7.0, w: 5.7, y: 1.45, colW: [1.6, 2.05, 2.05] }, 14, 0.55);
-T(s, "Beide Läufer final, beide jagen im Habitat; ein 30-s-Showcase-Video zeigt sie zusammen.", { x: 7.0, y: 4.45, w: 5.7, h: 0.9, fontSize: 14, italic: true, color: C.text2 });
-s.addNotes("ca. 40 s. Kurz die Zahlen; Bild: alter DC-Physik-Körper (Blöcke) gegen den neuen aus 218 Teilen.");
+card(s, 6.55, 3.4, 6.15, 2.65, "dc_path");
+T(s, "Der Weg zum Raubkatzen-Gang", { x: 6.8, y: 3.55, w: 5.7, h: 0.4, fontSize: 17, bold: true, color: C.text2 });
+s.addText(bullets(["v2: Schritt und Trab im Gangtakt, 2,4× weniger Energie", "v5: langer Panther-Schritt (0,62 m)", "v8: „Handstand“ auf Vorderbeinen und Armen",
+  "v11: Raubkatzen-Gewichte – kein Trippeln mehr", "v12: 218-Teile-Körper, Wolf-Vorbild, T-Rex-Arme, neue Hand", "v12z: Planke weg, Gang geglättet → final"], 14), { isTextBox: true, x: 6.8, y: 4.05, w: 5.75, h: 1.95, valign: "top", margin: 0 });
+T(s, "Schritt 0,52–0,97 m · Wippen ≤ 2 cm · keine Stürze · offen: Drehen am Ort", { x: 6.55, y: 6.3, w: 6.15, h: 0.4, fontSize: 13, italic: true, color: C.accent3 });
+s.addNotes("ca. 45 s. Der DC brauchte zwölf Versionen: Schlupflöcher wie Handstand und Planke, dann der Körper aus 218 Teilen nach dem echten Modell und der Wolf als Vorbild. Am Ende flüssiger Gang, Sprint bis 4 m/s und sicheres Bremsen.");
 
 // ================================================================== 6b Ergebnis Myrranox
 s = content("Was ist herausgekommen? Myrranox", "Lernen");
