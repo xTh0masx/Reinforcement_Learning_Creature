@@ -126,6 +126,20 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | 08:40 – 11:40 | 3.0 h | sprint stage, hands, hand remodel (rig + CoACD), palm rules, soft wrist, crouch, arm brain | `f51ab6c` … `cb6270e` |
 | 11:40 – 13:45 | 2.1 h (1.4 h laptop asleep) | v12r, arm brain, arms dropped from the sprint, v12u, documentation | `4eb9c67` … |
 
+## Session 10 – 14 Oct evening (DC final, hunting game)
+
+| Time | Duration | Step | Result |
+| --- | --- | --- | --- |
+| 13:50 – 21:25 | ~3 h active (+ laptop asleep / on battery) | plank fix, smoothing stage v12y / v12z | `dc_legs_v12z` final |
+| 21:25 – 22:15 | 0.8 h | GitHub push (3.8 GB LFS), hunting game built and scrapped | `918188e`, `000bcd3` |
+
+## Session 11 – 21 / 28 Oct (showcase v6, render speed, docs)
+
+| Time | Duration | Step | Result |
+| --- | --- | --- | --- |
+| 21.10 | ~1.5 h | final walkers in `record_world.py`, showcase v6 recorded + imported, render speed measured, 30-s clip (16 min render) | `fb674da` … `663fd43` |
+| 28.10 | ~0.5 h | both final walkers in MuJoCo, documentation and presentation | `a6c08d7` |
+
 ## Compute per training run
 
 | Run | Start → end | Wall time | Steps | Outcome |
@@ -146,6 +160,8 @@ Myrranox v3b / v3c retries: see `locomotion_training_log.md` (sessions 8b, 8c).
 | Showcase v4 render | 28.09 13:13 → 18:05 | 4.9 h | 18 002 frames | video |
 | myr/dc_legs_v5_pilot | 29.09 09:40 → 09:50 | 0.2 h | 2 × 0.5M | DC ok, Myr knee locked |
 | myr_legs_v5, dc_legs_v5, dc_legs_v5b | 29.09 09:52 → 12:50, 30.09 08:20 → 08:40 | 3.3 h | 3M + 1.5M + 2M | Myr recommended, DC mixed |
+| DC v12w … v12z (plank fix, smoothing) | 14.10 13:55 → 21:25 | ~3 h active | 6.8M | `dc_legs_v12z` final |
+| Showcase v6 30-s clip render | 21.10 | 16 min | 1 440 frames | video |
 | DC v12 stages (v12 … v12u, arm brain) | 13.10 22:55 → 14.10 13:30 | ~6 h active (+ 7.5 h stopped / asleep) | ~10M | v12u running |
 | v9 / v10 / v11 stages | 13.10 09:20 → 20:30 | ~9 h (2 runs in parallel) | ~20M | Myrranox v10 released |
 | Showcase v4 no-rocks render | 28.09 18:25 → 21:50, 29.09 08:11 → 09:02 | 4.3 h | 18 002 frames | video |

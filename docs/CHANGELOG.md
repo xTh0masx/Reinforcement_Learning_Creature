@@ -5,6 +5,26 @@ All changes and owner decisions, newest first. Commit hashes refer to branch `rl
 [predator_training_log.md](predator_training_log.md), [experiments.csv](experiments.csv),
 time spent per step: [TIME_LOG.md](TIME_LOG.md).
 
+## 28 Oct 2026
+
+- `watch_locomotion.py --model`: shows a saved brain (both final walkers side by side in MuJoCo).
+- Documentation and presentation updated (final walkers, showcase v6, render speed).
+
+## 21 Oct 2026
+
+**Showcase v6 with the final walkers** (`fb674da`, `7bd0beb`, `663fd43`)
+- `record_world.py`: default walkers Myrranox v10 and DC v12z; 5-min recording without rocks (both survive, 4 prey
+  each, no falls); imported into `blender/habitat_showcase.blend` at 24 fps.
+- `render_camera.py --sharp-shadows`; render speed measured (integrated GPU: 0.83 → ~0.6 s per frame with 8 samples,
+  sharp shadows, 24 fps – about half the time for a 5-min video); `videos/showcase_v6_30s.mp4`.
+
+## 14 Oct 2026 (late evening)
+
+- **DC walking final** (owner): `models/dc_legs_v12z`, tag `dc-v12-final`.
+- **Hunting game** (owner idea: 3 min hunt for points, then 30 s to the water hole or die) built (`918188e`) and
+  **scrapped** by the owner the same evening – reverted (`000bcd3`).
+- Everything pushed to GitHub (branch `rl-locomotion-setup` with tags).
+
 ## 14 Oct 2026 (evening)
 
 **DC v12: plank fixed, smoothing stage → `models/dc_legs_v12z`** (owner: "why does it make a plank position", "clunky

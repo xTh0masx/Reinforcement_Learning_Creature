@@ -392,6 +392,36 @@ Figures: `figures/dc_physics_body_v11_vs_v12.jpg`, `figures/wolf_reference_frame
 `figures/dc_arms_folded_vs_trex.png`, `figures/dc_trex_arms_walk.png`, `figures/dc_hand_real_model_closeup.png`,
 `figures/dc_hand_v12_poses.png`, `figures/dc_hand_v12_rig_folded_open.png`, `figures/dc_sprint_pose_palms.png`.
 
+## 6j. Final walkers, hunting-game idea, showcase v6 (14–28 Oct)
+
+**Final walkers (owner).** Myrranox `models/myr_legs_v10` (tag `myrranox-v10-final`, 13 Oct) and DC
+`models/dc_legs_v12z` (tag `dc-v12-final`, 14 Oct: "this was the final training of the DC"). `record_world.py` walks
+with both by default.
+
+**Hunting game (14 Oct, scrapped).** Owner idea: one round = 3 min hunt (+1 point per prey), then 30 s to reach the
+water hole or die; the survivor with the most points wins (hunger, fatigue and territories kept, prey respawning). It
+was built (`918188e`) and scripted rivals played it: the DC (about twice as fast) scored about 7 points and always
+reached the water hole, the Myrranox about 3 and often ran itself tired (at 100 % fatigue it only manages 30 % of its
+top speed). The owner scrapped the idea a few minutes into the first training; the code was reverted (`000bcd3`), the
+released hunting brains are unchanged.
+
+**Showcase v6 (21 Oct).** Recorded with the final walkers in the habitat without rocks: 5 min, both survive, 4 prey
+each, no falls (2 min of compute). The Blender import works with the new DC body (T-rex arms, remodelled hand); the
+Myrranox is still shown without textures. Rendered at 24 fps, 8 samples, sharp shadows: `videos/showcase_v6_30s.mp4`
+(30 s, 16 min of rendering); the 5-min render is open.
+
+**Why rendering takes long.** The laptop renders with its integrated GPU (Intel Iris Xe). Measured per frame in the
+real animation render (960 × 540, incl. rig, mesh deformation, HUD, PNG):
+
+| Settings | s / frame | 5-min video (2 cameras) |
+| --- | --- | --- |
+| 16 samples, soft shadows, 30 fps (until showcase v5) | 0.83 | ~4.2 h (4.3–5.7 h measured incl. battery) |
+| 8 samples | 0.71 | ~3.6 h |
+| 8 samples, sharp shadows | 0.56 | ~2.8 h |
+| + 24 fps (showcase v6) | ~0.6 | ~2.2 h |
+| 4 samples | 0.55 | visible grain – not used |
+| Dedicated GPU (desktop / cloud, estimate) | ~0.05–0.1 | ~15–30 min |
+
 ## 7. Videos and graphs
 
 | File | What it shows |
@@ -412,7 +442,8 @@ Figures: `figures/dc_physics_body_v11_vs_v12.jpg`, `figures/wolf_reference_frame
 | `videos/showcase_side_by_side_v4.mp4` | **Showcase v4, 5:00**: both creatures on walking v4 (precise + fluid), rock-dodging side cameras |
 | `videos/showcase_side_by_side_v3.mp4` | **Showcase v3, 5:00**: the same with the alive DC (walking v3) and Myrranox v2 + passive parts; cameras dodge rocks |
 | `videos/myr_legs_v10_training.mp4`, `videos/myr_legs_v5_vs_v10.mp4` | **Myrranox walking v10**: whole training (0 → 3M) and v5 vs v10 on the same commands |
-| `presentation/Endemic_Creatures_RL.pptx` | Project presentation (German, updated 14 Oct incl. DC v12) |
+| `videos/showcase_v6_30s.mp4`, `figures/showcase_v6_still.jpg` | **Showcase v6 (30 s)**: both creatures with their final walkers (Myrranox v10, DC v12z) |
+| `presentation/Endemic_Creatures_RL.pptx` | Project presentation (German, updated 28 Oct) |
 | `figures/dc_physics_body_v11_vs_v12.jpg`, `figures/dc_hand_*.png`, `figures/dc_*arms*.png`, `figures/wolf_reference_frames.png` | **DC v12**: detailed body, real hand vs physics hand, T-rex arms, sprint pose, wolf reference frames |
 | `videos/myr_legs_v4_vs_v5.mp4`, `videos/dc_legs_v4_vs_v5.mp4`, `videos/*_legs_v5*_training.mp4` | **Walking v5 (natural style)**: insect knees / panther stride before vs after; whole v5 trainings |
 | `videos/*_legs_v4_training.mp4`, `videos/myr_legs_v2_vs_v4.mp4`, `videos/dc_legs_v3_vs_v4.mp4` | **Walking v4 (precise + fluid)**: whole fine-tuning (4M → 7M, every 250k) next to the learning curve; before / after on the same commands |
@@ -456,10 +487,10 @@ Live during training: `tensorboard --logdir runs`, `python watch_locomotion.py -
 
 ## 9. Next (open)
 
-- DC v12: finish the four-legged sprint stage (`dc_legs_v12u`, braking from a sprint without falling), then measure
-  against the wolf targets (stride, paw track, head height) and release a new DC walker; re-record the showcase with it.
-- Myrranox: walking v10 is final (owner, 13 Oct); fine-tuning its predator brain with the physics body (plan D2);
-  fatigue balance (owner decision).
+- Showcase v6: render the full 5 minutes (about 2.2 h on the laptop, or minutes on a machine with a dedicated GPU).
+- Walking is final for both creatures (Myrranox v10, DC v12z) – no further leg training unless the owner asks.
+- Hunting: the brains are still the 2D-trained ones; fine-tuning with the physics bodies (plan D2), fatigue balance
+  and the speed gap (DC about twice as fast) are open (owner decisions).
 - Raids and territory defence (not learned); alternating rounds against the other species' trained brain.
 - Final scene: 2 Myrranox + 2 DC; terrain/props; relink the Myrranox textures and re-render.
 - Paper and presentation (deadline and format still open).
