@@ -191,11 +191,10 @@ T(s, "Dreifuß-Takt 87 % der Zeit · Knie 60° · Hinterleib nie am Boden · kei
 s.addNotes("ca. 45 s. Der Myrranox war schwieriger als gedacht: erst als das Gewicht stimmte (leichterer Hinterleib) und ein fester Dreifuß-Rhythmus vorgegeben wurde, lief er wie ein Insekt. Rückwärts und Drehen auf der Stelle hat er erst mit v10 gelernt.");
 
 // ================================================================== 6c Lernkurven
-s = content("Lernkurven aller Gehirn-Versionen", "Lernen");
-s.addImage({ path: FIG("locomotion/learning_curves_all_myrranox.png"), x: M, y: 1.35, w: 6.0, h: 6.0 * 1147 / 1440, objectName: "lc_myr" });
-s.addImage({ path: FIG("locomotion/learning_curves_all_dc.png"), x: 7.75, y: 1.3, w: 5.0, h: 5.0 * 1500 / 1440, objectName: "lc_dc" });
-T(s, "Jede Version mit eigener Skala: Die Belohnung wurde fast jedes Mal anders definiert (v1–v8 bis ≈ 3.000 je Episode, ab v9 multiplikativ 0–50). Steigende Kurven = das Gehirn lernt; Einbrüche = neue Regeln oder ein Schlupfloch.", { x: M, y: 6.25, w: 6.85, h: 0.7, fontSize: 12, italic: true, color: C.text2 });
-s.addNotes("ca. 45 s. Links alle Myrranox-, rechts alle DC-Versionen, je ein kleines Diagramm. Wichtig: die Werte sind zwischen Versionen nicht vergleichbar, nur der Verlauf. Gut zu sehen: v1-v3 lernen stetig; Einbrüche bei v4/v5 durch strengere Regeln; v9 die neue Belohnung; beim DC v12 viele kurze Stufen bis zum finalen Gehirn.");
+s = content("Lernkurve beider Kreaturen über alle Versionen", "Lernen");
+s.addImage({ path: FIG("locomotion/learning_curve_common.png"), x: 1.15, y: 1.25, w: 11.0, h: 11.0 * 870 / 1800, objectName: "lc_common" });
+T(s, "Gleicher Test für alle 363 gespeicherten Gehirne: Befehl „Gehen mit 0,6 m/s“. Lauf-Qualität = Tempo trifft × Rumpf ruhig × Takt gleichmäßig × kein Sturz. Punkte = alle Checkpoints einer Version, Linie = bestes Gehirn, Stern = freigegebenes Gehirn. Nicht gemessen: wie tierähnlich der Gang aussieht.", { x: M, y: 6.6, w: 12.1, h: 0.5, fontSize: 11, italic: true, color: C.text2 });
+s.addNotes("ca. 45 s. Da sich die Belohnung zwischen den Versionen geändert hat, habe ich alle Gehirne beider Kreaturen nachträglich mit dem gleichen Test gemessen. Man sieht: Fortschritt nicht geradlinig - v6/v8 beim DC waren Einbrüche (sechs Gliedmaßen, Handstand), der Myrranox brach bei v9 ein (Schubkarre). Der finale DC v12z ist das beste DC-Gehirn; beim Myrranox v10 kostet das Trippeln der Vorderbeine Punkte.");
 
 // ================================================================== 7 Gelernt
 pres.addSection({ title: "Rückblick" });

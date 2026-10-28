@@ -430,6 +430,7 @@ real animation render (960 × 540, incl. rig, mesh deformation, HUD, PNG):
 | `videos/myr_legs_v2_training.mp4`, `videos/dc_legs_v2_training.mp4` | Same for v2 (natural gait) |
 | `videos/*_legs_v1_vs_v2.mp4` | v1 and v2 side by side on the same commands |
 | `figures/locomotion/learning_curves_<species>.png` | Reward curves of all walking runs incl. the failed pilots |
+| `figures/locomotion/learning_curve_common.png`, `evaluations/all_checkpoints_walk.csv` | **One learning curve for both creatures**: all 363 checkpoints tested the same way (walk 0.6 m/s; walking quality = speed accuracy × steady trunk × even rhythm × no fall; `eval_all_checkpoints.py`) – best brain per version, released brains starred |
 | `figures/locomotion/learning_curves_all_<species>.png` | **All brain versions** (one panel per version, own scale; `make_learning_curves.py`) – used in the 10-minute presentation |
 | `figures/locomotion/<run>/progress.gif` | All checkpoints back to back (short) |
 | `figures/locomotion/<run>/contact_sheet.png` | One frame per checkpoint |
