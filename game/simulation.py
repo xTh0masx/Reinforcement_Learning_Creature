@@ -6,6 +6,7 @@ The simulation process sends, per navigation step (0.1 s), the five 50 Hz body s
 all MuJoCo bodies) and the creatures' needs, activity and the prey. The game interpolates the snapshots at its own clock.
 A creature that starves ends the day: after a short pause a new day starts (next seed).
 """
+import dataclasses
 import multiprocessing as mp
 import queue
 import time
@@ -15,6 +16,12 @@ import numpy as np
 
 HABITAT = "sim/habitat_no_rocks.json"      # the habitat the final showcase runs in (no rocks inside the walls)
 LEAD = 0.3                                  # s the simulation runs ahead of the picture (room to interpolate)
+
+# Game-only tuning (training, showcase and evaluations keep the original values).
+# Myrranox: its walking brain v10 tops out at ~1.2 m/s, the navigation limit of 1.2 m/s only got ~1.05 m/s out of it;
+# asking for 1.5 m/s gets the full ~1.2 m/s. It also recovers 2.5x faster from fatigue.
+GAME_SPECIES = {"myrranox": {"max_speed": 1.5, "fatigue_recovery": 0.025, "fatigue_rest_recovery": 0.075}}
+GAME_PREY = {"wander_speed": 0.10, "flee_speed": 0.22}     # was 0.15 / 0.35 m/s
 
 
 # ------------------------------------------------------------------------------------------------- simulation process
@@ -40,9 +47,16 @@ def _engine(out, clock, speed, paused, stop, seed):
     while not stop.value:
         generation += 1
         env, brain, obs = record_world.make_env("myrranox", "dc", seed, HABITAT)
+        env.habitat.prey.update(GAME_PREY)
+        for c in env.creatures:
+            if c.species.name in GAME_SPECIES:
+                c.species = dataclasses.replace(c.species, **GAME_SPECIES[c.species.name])
         world = PhysicsWorld([{"id": c.id, "species": c.species.name, "loco": record_world.WALKERS[c.species.name],
                                "pos": tuple(c.pos), "yaw": c.heading} for c in env.creatures],
                              habitat, seed=seed, passive=True)
+        for c in env.creatures:                       # the walking body must accept the faster commands too
+            body = world.bodies[c.id]
+            body.top_speed = max(body.top_speed, c.species.max_speed)
         names = {mujoco.mj_id2name(world.model, mujoco.mjtObj.mjOBJ_BODY, i): i for i in range(world.model.nbody)}
         out.put(("day", generation, {"ids": world.ids,
                                      "species": {i: world.bodies[i].species_name for i in world.ids},
