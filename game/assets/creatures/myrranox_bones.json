@@ -1,0 +1,23 @@
+{
+ "torso": null,
+ "front_L_s0": "torso",
+ "front_L_s1": "front_L_s0",
+ "front_L_s2": "front_L_s1",
+ "front_R_s0": "torso",
+ "front_R_s1": "front_R_s0",
+ "front_R_s2": "front_R_s1",
+ "mid_L_s0": "torso",
+ "mid_L_s1": "mid_L_s0",
+ "mid_L_s2": "mid_L_s1",
+ "mid_R_s0": "torso",
+ "mid_R_s1": "mid_R_s0",
+ "mid_R_s2": "mid_R_s1",
+ "back_L_s0": "torso",
+ "back_L_s1": "back_L_s0",
+ "back_L_s2": "back_L_s1",
+ "back_R_s0": "torso",
+ "back_R_s1": "back_R_s0",
+ "back_R_s2": "back_R_s1",
+ "abdomen": "torso",
+ "head": "torso"
+}

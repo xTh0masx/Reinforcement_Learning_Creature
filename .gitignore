@@ -30,3 +30,8 @@ sim/dc_parts_sculpt.json
 sim/dc_parts_full.json
 ~$*
 node_modules/
+
+# game: Poly Haven downloads and the game versions made from them (python game/fetch_assets.py, then blender/scripts/prepare_game_env.py)
+game/assets/polyhaven/
+game/assets/env/
+game/assets/textures/

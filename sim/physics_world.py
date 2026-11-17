@@ -62,9 +62,10 @@ class PhysicsWorld:
         q = self.data.qpos[b.q0:b.q0 + 7]
         return {"pos": q[:2].copy(), "heading": _yaw(q[3:7])}
 
-    def step(self, record_poses=False):
+    def step(self, record_poses=False, on_control=None):
         """Advance NAV_DT seconds. Returns per creature: pos, heading, speed, turn_rate, energy (J), fell,
-        and with record_poses the pose (LocomotionEnv.pose) after each of the 5 control steps (50 Hz)."""
+        and with record_poses the pose (LocomotionEnv.pose) after each of the 5 control steps (50 Hz).
+        on_control(t) is called after every control step (the game takes its 50 Hz body snapshots there)."""
         energy = {i: 0.0 for i in self.ids}
         poses = {i: [] for i in self.ids}
         fell = {i: False for i in self.ids}
@@ -86,6 +87,8 @@ class PhysicsWorld:
                 if record_poses:
                     poses[i].append(self.bodies[i].pose())
             self.t += CONTROL_DT
+            if on_control is not None:
+                on_control(self.t)
         out = {}
         for i in self.ids:
             s = self.state(i)
